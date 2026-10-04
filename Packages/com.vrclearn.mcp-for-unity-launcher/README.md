@@ -8,6 +8,8 @@ If MCP for Unity is missing or incompatible, Launcher opens installation instruc
 
 Open **Window > MCP for Unity Launcher** for status, logs, and the current project's management switch. Remote HTTP remains under its existing management. Configure your AI client to use the HTTP `/mcp` endpoint, normally `http://127.0.0.1:8080/mcp`.
 
+The Language selector in both Launcher windows supports English, Japanese, Korean, Traditional Chinese, and Simplified Chinese. The initial language follows your system language, with English as the fallback. The choice is saved in this user's EditorPrefs and applies to both Launcher windows across projects, independently of MCP for Unity's own choice. Diagnostic logs and runtime error messages remain in English.
+
 Each project must install Launcher to participate reliably. Projects with only MCP for Unity retain the original lifecycle behavior. External healthy MCP servers are reused but never terminated by Launcher.
 
 The package uses MCP for Unity's public service interfaces and Python's standard library. It includes no separately installed tray app or login task. See `CHANGELOG.md` for changes and `LICENSE` for the MIT license.

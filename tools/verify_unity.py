@@ -45,6 +45,7 @@ def main():
         (project / "Packages/manifest.json").write_text('{"dependencies":{}}\n', encoding="utf-8")
         shutil.copytree(launcher, project / "Packages" / launcher.name, ignore=ignore)
         shutil.copy2(fixture, project / "Assets/Editor/LauncherCompilationProbe.cs")
+        shutil.copy2(repository / "tests/unity/LauncherLocalizationProbe.cs", project / "Assets/Editor/LauncherLocalizationProbe.cs")
         if expected == "1":
             shutil.copytree(args.mcp_package, project / "Packages/com.coplaydev.unity-mcp", ignore=ignore)
             shutil.copy2(repository / "tests/unity/LauncherConnectionProbe.cs", project / "Assets/Editor/LauncherConnectionProbe.cs")

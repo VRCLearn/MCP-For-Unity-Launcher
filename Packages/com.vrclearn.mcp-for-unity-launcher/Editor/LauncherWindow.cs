@@ -3,6 +3,7 @@ using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Transport;
 using UnityEditor;
 using UnityEngine;
+using static MCPForUnityLauncher.Editor.LauncherLocalization;
 
 namespace MCPForUnityLauncher.Editor
 {
@@ -18,41 +19,44 @@ namespace MCPForUnityLauncher.Editor
             window.Show();
         }
 
+        private void OnEnable() => LanguageChanged += Repaint;
+        private void OnDisable() => LanguageChanged -= Repaint;
         private void OnInspectorUpdate() => Repaint();
 
         private void OnGUI()
         {
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
             EditorGUILayout.LabelField("MCP for Unity Launcher", EditorStyles.boldLabel);
+            DrawLanguageSelector();
             EditorGUILayout.Space();
-            bool enabled = EditorGUILayout.ToggleLeft("自动管理当前项目的 MCP 服务", LauncherBootstrap.Enabled);
+            bool enabled = EditorGUILayout.ToggleLeft(Text("Automatically manage MCP for this project"), LauncherBootstrap.Enabled);
             if (enabled != LauncherBootstrap.Enabled) LauncherBootstrap.Enabled = enabled;
-            EditorGUILayout.HelpBox("打开项目后自动启动和连接。关闭编辑器 A 后，只要编辑器 B 仍在使用 Launcher，共享服务会继续运行；意外中断会自动恢复。", MessageType.Info);
+            EditorGUILayout.HelpBox(Text("Opening a project starts the server and connects automatically. The shared server stays running while another managed Editor is open, and recovers after unexpected interruptions."), MessageType.Info);
 
             if (LauncherBootstrap.IsRemote)
-                EditorGUILayout.HelpBox("当前使用 HTTP Remote，Launcher 保留远程设置，不启动本地服务。", MessageType.Info);
+                EditorGUILayout.HelpBox(Text("HTTP Remote is selected. Launcher keeps your remote settings and does not start a local server."), MessageType.Info);
             else
-                EditorGUILayout.SelectableLabel("MCP 地址：" + LauncherBootstrap.BaseUrl.TrimEnd('/') + "/mcp", GUILayout.Height(20));
+                EditorGUILayout.SelectableLabel(Format("MCP address: {0}", LauncherBootstrap.BaseUrl.TrimEnd('/') + "/mcp"), GUILayout.Height(20));
 
             var client = MCPServiceLocator.TransportManager.GetClient(TransportMode.Http);
-            EditorGUILayout.LabelField("当前项目连接", client != null && client.IsConnected ? "已连接" :
-                LauncherBootstrap.CanManageLocalServer ? "未连接 / 等待自动连接" : "未连接");
+            EditorGUILayout.LabelField(Text("Project connection"), client != null && client.IsConnected ? Text("Connected") :
+                LauncherBootstrap.CanManageLocalServer ? Text("Disconnected / waiting for automatic connection") : Text("Disconnected"));
             if (!string.IsNullOrEmpty(client?.State?.SessionId) && client.State.SessionId != "pending")
-                EditorGUILayout.LabelField("会话 ID", client.State.SessionId);
+                EditorGUILayout.LabelField(Text("Session ID"), client.State.SessionId);
 
             if (!string.IsNullOrEmpty(LauncherBootstrap.LastError))
                 EditorGUILayout.HelpBox(LauncherBootstrap.LastError, MessageType.Warning);
 
             var status = LauncherBootstrap.ReadStatus();
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("共享守护进程", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(LauncherBootstrap.IsSupervisorHealthy ? "运行中" : "尚未运行或等待恢复");
+            EditorGUILayout.LabelField(Text("Shared supervisor"), EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(LauncherBootstrap.IsSupervisorHealthy ? Text("Running") : Text("Not running / waiting for recovery"));
             if (status != null)
             {
                 EditorGUILayout.LabelField("PID", status.supervisorPid.ToString());
-                EditorGUILayout.LabelField("最近更新", status.updatedUtc ?? "");
+                EditorGUILayout.LabelField(Text("Last updated"), status.updatedUtc ?? "");
                 EditorGUILayout.Space();
-                EditorGUILayout.LabelField("已注册编辑器", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField(Text("Registered Editors"), EditorStyles.boldLabel);
                 if (status.editors != null)
                 {
                     foreach (var editor in status.editors)
@@ -63,25 +67,25 @@ namespace MCPForUnityLauncher.Editor
                     }
                 }
                 EditorGUILayout.Space();
-                EditorGUILayout.LabelField("服务", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField(Text("Services"), EditorStyles.boldLabel);
                 if (status.services != null)
                 {
                     foreach (var service in status.services)
                     {
                         if (service == null) continue;
                         EditorGUILayout.SelectableLabel(service.baseUrl ?? "", GUILayout.Height(18));
-                        EditorGUILayout.LabelField("状态", TranslateState(service.state));
-                        EditorGUILayout.LabelField("管理方式", service.owned ? "Launcher 管理" : "连接已有服务");
+                        EditorGUILayout.LabelField(Text("Status"), TranslateState(service.state));
+                        EditorGUILayout.LabelField(Text("Management"), service.owned ? Text("Managed by Launcher") : Text("Using an existing server"));
                         if (service.pid > 0) EditorGUILayout.LabelField("PID", service.pid.ToString());
-                        if (service.restartCount > 0) EditorGUILayout.LabelField("恢复次数", service.restartCount.ToString());
+                        if (service.restartCount > 0) EditorGUILayout.LabelField(Text("Recovery count"), service.restartCount.ToString());
                         if (!string.IsNullOrEmpty(service.error)) EditorGUILayout.HelpBox(service.error, MessageType.Warning);
                     }
                 }
             }
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("日志目录", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(Text("Log directory"), EditorStyles.boldLabel);
             EditorGUILayout.SelectableLabel(LauncherBootstrap.LogDirectory, GUILayout.Height(36));
-            if (GUILayout.Button("打开日志目录"))
+            if (GUILayout.Button(Text("Open log directory")))
             {
                 Directory.CreateDirectory(LauncherBootstrap.LogDirectory);
                 EditorUtility.RevealInFinder(LauncherBootstrap.LogDirectory);
@@ -94,19 +98,19 @@ namespace MCPForUnityLauncher.Editor
             switch (state)
             {
                 case "running":
-                case "healthy": return "运行中";
-                case "starting": return "正在启动";
-                case "external": return "已有服务";
+                case "healthy": return Text("Running");
+                case "starting": return Text("Starting");
+                case "external": return Text("Existing server");
                 case "retrying":
-                case "backoff": return "等待自动恢复";
-                case "unhealthy": return "服务异常，正在检测";
-                case "blocked": return "端口被其他程序占用";
-                case "conflict": return "项目的服务配置不一致";
-                case "waiting": return "等待启动";
-                case "idle": return "等待最后一个编辑器退出";
-                case "error": return "发生错误";
-                case "stopped": return "已停止";
-                default: return state ?? "等待状态";
+                case "backoff": return Text("Waiting for automatic recovery");
+                case "unhealthy": return Text("Unhealthy / checking");
+                case "blocked": return Text("Port occupied by another application");
+                case "conflict": return Text("Projects have conflicting server settings");
+                case "waiting": return Text("Waiting to start");
+                case "idle": return Text("Waiting for the last Editor to close");
+                case "error": return Text("Error");
+                case "stopped": return Text("Stopped");
+                default: return state ?? Text("Waiting to start");
             }
         }
     }

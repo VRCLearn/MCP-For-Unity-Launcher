@@ -194,7 +194,7 @@ namespace MCPForUnityLauncher.Editor
                     return;
                 }
                 if (!IsAllowedUrl(BaseUrl))
-                    throw new InvalidOperationException("本地 MCP 地址必须是回环 HTTP 地址，例如 http://127.0.0.1:8080。");
+                    throw new InvalidOperationException("The local MCP URL must be a loopback HTTP address, such as http://127.0.0.1:8080.");
                 EditorConfigurationCache.Instance.SetUseHttpTransport(true);
                 if (_lastLocalUrl != null && _lastLocalUrl != BaseUrl)
                 {
@@ -249,7 +249,7 @@ namespace MCPForUnityLauncher.Editor
             ResolveScript();
             var uvx = ResolveExecutable(MCPServiceLocator.Paths.GetUvxPath());
             if (uvx == null)
-                throw new InvalidOperationException("未找到 uvx。请安装 uv，并在 MCP for Unity 的高级设置中配置 uvx 路径。");
+                throw new InvalidOperationException("uvx was not found. Install uv and configure the uvx path in MCP for Unity's Advanced Settings.");
             var arguments = new List<string>(AssetPathUtility.GetUvxDevFlagsList());
             arguments.AddRange(AssetPathUtility.GetBetaServerFromArgsList());
             arguments.AddRange(new[] { "mcp-for-unity", "--transport", "http", "--http-url", BaseUrl });
@@ -294,11 +294,11 @@ namespace MCPForUnityLauncher.Editor
                 }
             }
             if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(_packageVersion))
-                throw new InvalidOperationException("无法定位 Launcher 包及版本，请检查 VPM 安装。");
+                throw new InvalidOperationException("Could not locate the Launcher package and version. Check the package installation.");
             if (_packageVersion.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || _packageVersion.Contains(".."))
-                throw new InvalidOperationException("Launcher 包版本格式无效。");
+                throw new InvalidOperationException("The Launcher package version is invalid.");
             string source = Path.Combine(root, "Editor", "Supervisor", "supervisor.py");
-            if (!File.Exists(source)) throw new FileNotFoundException("Launcher 包缺少 supervisor.py，请重新安装包。");
+            if (!File.Exists(source)) throw new FileNotFoundException("The Launcher package is missing supervisor.py. Reinstall the package.");
             string destination = Path.Combine(StateDirectory, "runtime", _packageVersion, "supervisor.py");
             string text = File.ReadAllText(source);
             if (!File.Exists(destination) || File.ReadAllText(destination) != text) AtomicWrite(destination, text);
@@ -312,7 +312,7 @@ namespace MCPForUnityLauncher.Editor
             var uvx = ResolveExecutable(MCPServiceLocator.Paths.GetUvxPath());
             var uv = uvx == null ? null : ResolveExecutable(new ServerCommandBuilder().BuildUvPathFromUvx(uvx));
             if (uv == null)
-                throw new InvalidOperationException("未找到 uv（需要与 uvx 位于同一目录）。请安装完整 uv 或修正 uvx 路径。");
+                throw new InvalidOperationException("uv was not found alongside uvx. Install the complete uv runtime or correct the uvx path.");
             ResolveScript();
             var info = new ProcessStartInfo
             {
@@ -325,8 +325,8 @@ namespace MCPForUnityLauncher.Editor
             Directory.CreateDirectory(StateDirectory);
             _launchProcess?.Dispose();
             _launchProcess = Process.Start(info);
-            if (_launchProcess == null) throw new InvalidOperationException("无法启动 MCP 共享服务守护进程。");
-            Debug.Log(LogPrefix + "正在启动共享服务守护进程。");
+            if (_launchProcess == null) throw new InvalidOperationException("Could not start the shared MCP server supervisor.");
+            Debug.Log(LogPrefix + "Starting the shared server supervisor.");
         }
 
         private static void TryConnect()
@@ -379,13 +379,13 @@ namespace MCPForUnityLauncher.Editor
                     _needsNewEndpoint = false;
                     _connectFailures = 0;
                     _lastConnectionError = null;
-                    Debug.Log(LogPrefix + "当前 Unity 项目已自动连接到 " + requestedUrl + "。");
+                    Debug.Log(LogPrefix + "The Unity project automatically connected to " + requestedUrl + ".");
                 }
                 else
                 {
                     _connectFailures++;
                     _nextConnect = EditorApplication.timeSinceStartup + Math.Min(30, 5 * _connectFailures);
-                    SetConnectionError("当前 Unity 项目尚未连接到 MCP 服务；将自动重试。");
+                    SetConnectionError("The Unity project is not connected to the MCP server. Retrying automatically.");
                 }
             }
             catch (Exception exception)
@@ -436,7 +436,7 @@ namespace MCPForUnityLauncher.Editor
                 AtomicWrite(_leasePath, json);
                 _lastReleaseJson = json;
             }
-            catch (Exception exception) { SetError("无法注销当前编辑器：" + exception.Message); }
+            catch (Exception exception) { SetError("Could not unregister this Editor: " + exception.Message); }
         }
 
         internal static SupervisorStatus ReadStatus()
@@ -453,12 +453,12 @@ namespace MCPForUnityLauncher.Editor
 
         internal static void ReportSharedStop()
         {
-            Debug.Log(LogPrefix + "共享服务会在最后一个受管理的 Unity 编辑器退出后关闭。可在 Launcher 窗口关闭当前项目的自动管理。");
+            Debug.Log(LogPrefix + "The shared server stops after the last managed Unity Editor closes. Disable this project's automatic management in the Launcher window.");
         }
 
         internal static void ReportLaunchFailure()
         {
-            SetError(_lastError ?? "共享服务尚未就绪，请在 Launcher 窗口查看日志目录。");
+            SetError(_lastError ?? "The shared server is not ready. Check the log directory in the Launcher window.");
         }
 
         private static void SetError(string error)

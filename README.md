@@ -53,6 +53,8 @@ Install both packages in projects A and B and use the same local server address.
 
 Open **Window → MCP for Unity Launcher** to view service status, participating editors, and logs. Its management switch applies to the current project.
 
+Use the **Language** selector in either Launcher window to choose English, Japanese, Korean, Traditional Chinese, or Simplified Chinese. The default follows your system language, with English as the fallback; your selection is remembered independently of MCP for Unity across projects. Diagnostic logs and runtime error messages stay in English.
+
 ## Scope and current validation
 
 Launcher manages local HTTP services. Remote HTTP configurations stay under their existing management, and existing external servers are reused without taking ownership of their processes.

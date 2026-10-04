@@ -7,8 +7,12 @@ using UnityEngine;
 
 public static class LauncherCompilationProbe
 {
+    private static bool _nonEnglishDiagnostics;
+
     public static void Run()
     {
+        _nonEnglishDiagnostics = false;
+        Application.logMessageReceived += CaptureDiagnostics;
         try
         {
             var expected = Environment.GetEnvironmentVariable("MCP_LAUNCHER_EXPECT_INTEGRATION");
@@ -51,6 +55,8 @@ public static class LauncherCompilationProbe
 
             if (integration)
                 Type.GetType("LauncherConnectionProbe, Assembly-CSharp-Editor", true).GetMethod("Run").Invoke(null, null);
+            LauncherLocalizationProbe.Run();
+            Require(!_nonEnglishDiagnostics, "Launcher emitted a non-English diagnostic");
             Debug.Log("LAUNCHER_VERIFICATION: passed");
             EditorApplication.Exit(0);
         }
@@ -59,6 +65,16 @@ public static class LauncherCompilationProbe
             Debug.LogException(exception);
             EditorApplication.Exit(9);
         }
+        finally
+        {
+            Application.logMessageReceived -= CaptureDiagnostics;
+        }
+    }
+
+    private static void CaptureDiagnostics(string message, string stackTrace, LogType type)
+    {
+        if (message.StartsWith("[MCP for Unity Launcher]"))
+            _nonEnglishDiagnostics |= message.Any(c => c > 127);
     }
 
     private static EditorWindow[] LauncherWindows()

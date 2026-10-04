@@ -93,6 +93,7 @@ def validate_unitypackage(path: Path, manifest: dict) -> dict:
         raise ValueError('UnityPackage staged package.json differs from its VPM manifest.')
     for relative in ('Editor/LauncherBootstrap.cs', 'Editor/Supervisor/supervisor.py',
                      'Editor/Setup/LauncherDependencyWindow.cs',
+                     'Editor/Setup/LauncherLocalization.cs',
                      'Editor/Setup/MCPForUnityLauncher.Setup.Editor.asmdef'):
         if UNITY_ROOT + '/' + relative not in assets:
             raise ValueError('UnityPackage is missing required Launcher asset: ' + relative)

@@ -1,5 +1,6 @@
 using UnityEditor;
 using UnityEngine;
+using static MCPForUnityLauncher.Editor.LauncherLocalization;
 
 namespace MCPForUnityLauncher.Editor
 {
@@ -24,7 +25,7 @@ namespace MCPForUnityLauncher.Editor
             EditorApplication.update -= CheckOnce;
             if (SessionState.GetBool(PromptKey, false)) return;
             SessionState.SetBool(PromptKey, true);
-            Debug.LogWarning("[MCP for Unity Launcher] 请先安装兼容的 MCP for Unity。安装窗口提供 VPM 和 UPM 两种方式，也可从 Window → MCP for Unity Launcher 重新打开。");
+            Debug.LogWarning("[MCP for Unity Launcher] Install a compatible MCP for Unity package. The setup window provides VPM and UPM instructions; reopen it from Window > MCP for Unity Launcher.");
             LauncherDependencyWindow.Open();
         }
 #endif
@@ -43,42 +44,53 @@ namespace MCPForUnityLauncher.Editor
 #endif
         internal static void Open()
         {
-            var window = GetWindow<LauncherDependencyWindow>("MCP Launcher Setup");
+            var window = GetWindow<LauncherDependencyWindow>(Text("MCP Launcher Setup"));
             window.minSize = new Vector2(520, 400);
             window.Show();
+        }
+
+        private void OnEnable() => LanguageChanged += RefreshLanguage;
+        private void OnDisable() => LanguageChanged -= RefreshLanguage;
+        private void OnInspectorUpdate() => RefreshLanguage();
+
+        private void RefreshLanguage()
+        {
+            titleContent = new GUIContent(Text("MCP Launcher Setup"));
+            Repaint();
         }
 
         private void OnGUI()
         {
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
             EditorGUILayout.LabelField("MCP for Unity Launcher", EditorStyles.boldLabel);
+            DrawLanguageSelector();
             EditorGUILayout.Space();
 #if MCP_FOR_UNITY_LAUNCHER_HAS_MCP
-            EditorGUILayout.HelpBox("MCP for Unity 已安装。Launcher 会自动启动并连接本地服务。", MessageType.Info);
-            if (GUILayout.Button("打开 Launcher"))
+            EditorGUILayout.HelpBox(Text("MCP for Unity is installed. Launcher will automatically start and connect to the local server."), MessageType.Info);
+            if (GUILayout.Button(Text("Open Launcher")))
             {
                 EditorApplication.ExecuteMenuItem("Window/MCP for Unity Launcher");
                 Close();
             }
 #else
-            EditorGUILayout.HelpBox("Launcher 需要 MCP for Unity 10.3.0 或更新的 10.x 版本。请在当前项目中安装依赖；安装完成并重新编译后，Launcher 会自动启用。", MessageType.Warning);
+            EditorGUILayout.HelpBox(Text("Launcher requires MCP for Unity 10.3.0 or a newer 10.x version. Install it in this project; Launcher enables automatically after installation and recompilation."), MessageType.Warning);
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("通过 VPM 安装", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("适用于 VCC / ALCOMD：添加下面的 VPM 仓库，然后在当前项目的包管理页面安装 MCP for Unity。", MessageType.Info);
+            EditorGUILayout.LabelField(Text("Install through VPM"), EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(Text("For VCC / ALCOMD: add the VPM repository below, then install MCP for Unity in this project's package manager."), MessageType.Info);
             EditorGUILayout.SelectableLabel(VpmRepositoryUrl, GUILayout.Height(36));
-            if (GUILayout.Button("打开 VPM 安装页面")) Application.OpenURL(VpmPageUrl);
-            if (GUILayout.Button("复制 VPM 仓库地址")) EditorGUIUtility.systemCopyBuffer = VpmRepositoryUrl;
+            if (GUILayout.Button(Text("Open VPM installation page"))) Application.OpenURL(VpmPageUrl);
+            if (GUILayout.Button(Text("Copy VPM repository URL"))) EditorGUIUtility.systemCopyBuffer = VpmRepositoryUrl;
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("通过 UPM 安装", EditorStyles.boldLabel);
-            EditorGUILayout.HelpBox("适用于任何 Unity 项目，无需 VRChat 或 VCC：打开 Window → Package Manager，选择 + → Add package from git URL，粘贴下面的地址并安装。", MessageType.Info);
+            EditorGUILayout.LabelField(Text("Install through UPM"), EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(Text("For any Unity project, without VRChat or VCC: open Window > Package Manager, choose + > Add package from git URL, then paste the URL below and install."), MessageType.Info);
             EditorGUILayout.SelectableLabel(DependencyGitUrl, GUILayout.Height(54));
-            if (GUILayout.Button("复制 MCP for Unity 的 UPM 地址")) EditorGUIUtility.systemCopyBuffer = DependencyGitUrl;
-            if (GUILayout.Button("打开 Unity Package Manager")) EditorApplication.ExecuteMenuItem("Window/Package Manager");
+            if (GUILayout.Button(Text("Copy MCP for Unity UPM URL"))) EditorGUIUtility.systemCopyBuffer = DependencyGitUrl;
+            if (GUILayout.Button(Text("Open Unity Package Manager"))) EditorApplication.ExecuteMenuItem("Window/Package Manager");
 
             EditorGUILayout.Space();
-            EditorGUILayout.HelpBox("同一项目请只使用一种方式安装 MCP for Unity。Launcher 的服务自动启动功能还需要已安装的 uv / uvx。", MessageType.Info);
+            EditorGUILayout.HelpBox(Text("Use one installation method per project. Automatic server startup also requires uv / uvx to be installed."), MessageType.Info);
 #endif
             EditorGUILayout.EndScrollView();
         }

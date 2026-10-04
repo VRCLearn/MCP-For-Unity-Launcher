@@ -1,7 +1,7 @@
 {
     "name": "MCPForUnityLauncher.Editor",
     "rootNamespace": "MCPForUnityLauncher.Editor",
-    "references": ["MCPForUnity.Editor"],
+    "references": ["MCPForUnity.Editor", "MCPForUnityLauncher.Setup.Editor"],
     "includePlatforms": ["Editor"],
     "defineConstraints": ["MCP_FOR_UNITY_LAUNCHER_HAS_MCP"],
     "versionDefines": [
