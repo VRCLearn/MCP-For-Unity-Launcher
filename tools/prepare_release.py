@@ -1,7 +1,6 @@
 """Validate the stable tag and prepare release artifacts from this exact checkout."""
 import json
 import os
-from pathlib import Path
 
 from build_package import build, PACKAGE, ROOT
 

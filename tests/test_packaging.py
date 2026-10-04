@@ -79,6 +79,11 @@ class PackagingTests(unittest.TestCase):
         cache = self.package / 'Editor/Supervisor/__pycache__'
         cache.mkdir(exist_ok=True)
         (cache / 'supervisor.pyc').write_bytes(b'exclude bytecode')
+        (cache / 'supervisor.pyc.meta').write_text('exclude cached asset metadata')
+        cache.with_name(cache.name + '.meta').write_text('exclude cache folder metadata')
+        bytecode = self.package / 'Editor/Supervisor/supervisor.pyc'
+        bytecode.write_bytes(b'exclude legacy bytecode')
+        bytecode.with_name(bytecode.name + '.meta').write_text('exclude bytecode metadata')
         result = builder.build(self.root / 'output')
         with zipfile.ZipFile(result['archive']) as archive:
             names = archive.namelist()
@@ -93,6 +98,11 @@ class PackagingTests(unittest.TestCase):
                 self.assertNotIn('..', PurePosixPath(name).parts)
             manifest = json.loads(archive.read('package.json'))
         assets = builder.validate_unitypackage(Path(result['unitypackage']), manifest)
+        user_files = [path.relative_to(result['userPackage']).as_posix()
+                      for path in Path(result['userPackage']).rglob('*')]
+        for paths in (names, assets, user_files):
+            self.assertNotIn('__pycache__', '\n'.join(paths))
+            self.assertNotIn('.pyc', '\n'.join(paths))
         for source in self.package.rglob('*'):
             if source.suffix == '.meta' or '__pycache__' in source.parts or source.suffix == '.pyc':
                 continue

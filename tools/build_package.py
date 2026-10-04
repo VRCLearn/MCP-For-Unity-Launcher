@@ -20,10 +20,16 @@ GUID_NAMESPACE = uuid.UUID('25d53c5a-8fd3-4818-a943-178cf04b1559')
 UNITY_ROOT = 'Assets/MCPForUnityLauncher'
 
 
+def is_python_cache(path: Path) -> bool:
+    """Exclude bytecode, cache directories, and their Unity-generated metadata."""
+    return ('__pycache__' in path.parts or path.name == '__pycache__.meta'
+            or path.name.endswith(('.pyc', '.pyc.meta')))
+
+
 def ensure_metadata() -> None:
     """Stable GUIDs survive fresh builds; preserve every existing meta file."""
     for entry in sorted(PACKAGE.rglob('*')):
-        if entry.suffix == '.meta' or '__pycache__' in entry.parts or entry.suffix == '.pyc':
+        if entry.suffix == '.meta' or is_python_cache(entry):
             continue
         meta = entry.with_name(entry.name + '.meta')
         if meta.exists():
@@ -100,7 +106,7 @@ def build_unitypackage(path: Path, encoded_manifest: str, files: list[Path]) -> 
                  'DefaultImporter:\n    externalObjects: {}\n'.encode('utf-8'))
     entries = [(UNITY_ROOT, None, root_meta)]
     for source in sorted(PACKAGE.rglob('*')):
-        if source.is_dir() and '__pycache__' not in source.parts:
+        if source.is_dir() and not is_python_cache(source):
             entries.append((UNITY_ROOT + '/' + source.relative_to(PACKAGE).as_posix(),
                             None, source.with_name(source.name + '.meta').read_bytes()))
     for source in files:
@@ -163,7 +169,7 @@ def build(output: Path, download_url: str | None = None,
         raise ValueError('Hosted VPM downloads must use HTTPS.')
     encoded_manifest = json.dumps(manifest, ensure_ascii=False, indent=4) + '\n'
     files = [p for p in sorted(PACKAGE.rglob('*')) if p.is_file()
-             and '__pycache__' not in p.parts and p.suffix != '.pyc']
+             and not is_python_cache(p)]
     with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in files:
             relative = path.relative_to(PACKAGE).as_posix()

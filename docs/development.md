@@ -2,6 +2,16 @@
 
 The Python supervisor uses the standard library. The Editor assembly references MCP for Unity's public service interfaces. See [architecture](architecture.md) and [verification](verification.md) for implementation details and validation limits.
 
+## Repository layout
+
+- `Packages/com.vrclearn.mcp-for-unity-launcher/`: the installable Unity package, including its manifest, Editor code, supervisor, documentation, license, and stable Unity `.meta` files.
+- `tests/`: supervisor, distribution, and VPM listing regression tests.
+- `tools/`: local verification, package builds, and VPM publishing helpers.
+- `.github/`: CI workflows and the combined VPM repository configuration.
+- `docs/`: development, architecture, validation, and translated installation guidance.
+
+Only the Unity package directory is copied into release archives and local user packages. Repository tests, tools, workflows, and top-level docs are development resources. Python caches and their Unity-generated `.meta` files are excluded from distributions and ignored by Git; normal Unity metadata must be retained to preserve asset GUIDs.
+
 ## Local checks and builds
 
 Run from the repository root:

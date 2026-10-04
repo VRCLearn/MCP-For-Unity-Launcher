@@ -1,5 +1,7 @@
 __pycache__/
+__pycache__.meta
 *.pyc
+*.pyc.meta
 dist/
 .test-state/
 .compile/
