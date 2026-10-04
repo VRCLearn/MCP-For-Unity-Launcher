@@ -1,9 +1,8 @@
 {
-    "name": "MCPForUnityLauncher.Editor",
+    "name": "MCPForUnityLauncher.Setup.Editor",
     "rootNamespace": "MCPForUnityLauncher.Editor",
-    "references": ["MCPForUnity.Editor"],
+    "references": [],
     "includePlatforms": ["Editor"],
-    "defineConstraints": ["MCP_FOR_UNITY_LAUNCHER_HAS_MCP"],
     "versionDefines": [
         {
             "name": "com.coplaydev.unity-mcp",

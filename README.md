@@ -45,6 +45,8 @@ VRChat, VCC, and ALCOMD are not required for UPM installation.
 
 Install Launcher in each participating project. The Git URL selects the package subdirectory on `main`; use one installation method per project.
 
+If MCP for Unity is missing or its version is incompatible, Launcher opens an installation window with VPM and UPM instructions. It waits for a compatible dependency instead of causing missing-dependency compilation errors. Reopen the instructions from **Window → MCP for Unity Launcher**; Launcher enables automatically after installation and recompilation.
+
 ## Using multiple editors
 
 Install both packages in projects A and B and use the same local server address. Open both projects; closing A leaves the shared server available to B. When the last managed editor closes, Launcher stops the server it started after a 10-second grace period.

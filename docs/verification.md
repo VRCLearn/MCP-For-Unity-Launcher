@@ -1,5 +1,20 @@
 # Verification
 
+## Optional dependency checks — 2026-10-05
+
+Unity 2022.3.22f1 compiled isolated projects with the current Launcher package and with or without the actual MCP for Unity 10.3.0 source package:
+
+- Without MCP for Unity, only `MCPForUnityLauncher.Setup.Editor` compiled; there were no missing-dependency compiler errors.
+- With MCP for Unity 10.3.0, both Setup and the original integration assembly compiled successfully.
+- A test copy declaring MCP for Unity 10.2.0 left only Setup enabled, confirming the supported version range.
+- The Launcher menu created the installation window when the dependency was absent and the original status window when present.
+- Invoking the missing-dependency prompt twice, closing its window between calls, opened it only once in the same Editor session.
+- After removing an embedded dependency test copy, Unity finished reimporting with only Setup enabled and no final compilation failure. The first import encountered transient stale-cache errors for removed upstream source paths, so that filesystem-removal probe was not an entirely error-free import.
+
+The 62 Python tests and both package builds also passed. Use the native verification command in [development](development.md) to reproduce the missing/present checks. These batch checks create real Editor windows but do not verify their visual appearance, installation-button interaction, or Git/VPM installation end to end. Launcher service behavior remains covered by the existing process tests and prior validation below.
+
+## Initial release validation
+
 The latest recorded validation for version 0.1.0 was performed on Windows on 2026-10-04:
 
 - **62 Python tests passed.** Coverage includes editor registrations and release, singleton startup, process identity and PID reuse, reload tolerance, restart delays, health checks, configuration conflicts, external service preservation, atomic status updates, argument fidelity, and owned process-tree cleanup. Distribution and VPM tests cover archive integrity, stable Unity GUIDs, manifests, checksums, the two-package mapping, metadata updates, and filtering releases by package ID for both the index and official renderer.

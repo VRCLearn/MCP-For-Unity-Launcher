@@ -1,5 +1,9 @@
 # Lifecycle ownership
 
+The service integration assembly uses a package Version Define and Define Constraint for `com.coplaydev.unity-mcp` versions `[10.3.0,11.0.0)`. Missing or incompatible dependencies exclude that assembly from compilation. The nested `Editor/Setup` assembly has no MCP references or compilation constraint, so its installation window remains available. Its matching Version Define selects the fallback menu only while the integration is excluded, avoiding duplicate menu entries.
+
+An interactive Editor session opens the installation window once when the dependency is unavailable; batch mode suppresses the prompt. VPM and UPM instructions install the same dependency package. Installing a compatible package activates the integration on recompilation without changing project scripting defines. The Launcher UnityPackage also supports this arrangement when MCP for Unity is installed through VPM or UPM.
+
 The upstream Editor shutdown handler calls `StopManagedLocalHttpServer`. Its pidfile and instance-token handshake live in user-wide EditorPrefs. Multiple editors therefore read the same handshake despite running different projects. Upstream `StartLocalHttpServer` also tries to stop an existing local server before launching another one.
 
 Launcher installs an `IServerManagementService` decorator through the public `MCPServiceLocator.Register` API immediately on Editor domain initialization. Startup, manual stop, and managed shutdown are intercepted for supervised local lifecycle ownership. Ordinary helpers retain the captured original service implementation. The decorator never resolves itself through the locator when delegating.
