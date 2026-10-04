@@ -47,6 +47,7 @@ def main():
         shutil.copy2(fixture, project / "Assets/Editor/LauncherCompilationProbe.cs")
         if expected == "1":
             shutil.copytree(args.mcp_package, project / "Packages/com.coplaydev.unity-mcp", ignore=ignore)
+            shutil.copy2(repository / "tests/unity/LauncherConnectionProbe.cs", project / "Assets/Editor/LauncherConnectionProbe.cs")
         log = project / "unity.log"
         environment = dict(os.environ, MCP_LAUNCHER_EXPECT_INTEGRATION=expected)
         command = [str(args.unity_executable.resolve()), "-batchmode", "-nographics", "-projectPath", str(project),

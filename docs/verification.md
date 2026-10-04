@@ -1,5 +1,17 @@
 # Verification
 
+## Project connection checks — 2026-10-05
+
+Unity 2022.3.22f1 and the actual MCP for Unity 10.3.0 package were used in isolated projects:
+
+- Native connection regression checks passed through the upstream bridge and transport manager with test clients: a negative TCP probe cannot block the actual connection, live sessions remain intact, upstream socket reconnection is preserved, stopped sessions reconnect, failed initial connections back off and retry, and endpoint changes initiate a new connection.
+- A real MCP 10.3.0 server registered the original Launcher's project and 36 tools on first connection. The original first-connect problem was not reproduced on this machine.
+- After an explicit HTTP transport Stop, the original Launcher failed to reconnect during an eight-second observation. The revised Launcher registered a new server session and 36 tools about three seconds after Stop.
+- The real-network probe's client-state check reported no recovery because it also required a non-pending session ID. Server logs and two `/api/instances` responses confirm recovery. In upstream 10.3.0, registration handling and StartAsync can race when assigning the session ID to the display state; the Launcher window hides the pending placeholder.
+- The final source compiled without C# warnings or errors and passed the native connection and menu checks. The missing-dependency check and all 62 Python tests also passed.
+
+The real-network checks invoked the Launcher connection tick inside batch Editors with a server started independently on an isolated loopback port. They validate actual WebSocket project and tool registration, rather than full interactive project-open startup. Changed EditorPrefs were restored; the test Editors and servers exited. No AI-client tool call or real-server crash/restart scenario was exercised for this change. The prior interactive acceptance checklist below remains applicable.
+
 ## Optional dependency checks — 2026-10-05
 
 Unity 2022.3.22f1 compiled isolated projects with the current Launcher package and with or without the actual MCP for Unity 10.3.0 source package:

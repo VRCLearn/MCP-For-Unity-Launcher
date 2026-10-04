@@ -1,4 +1,6 @@
 using System.IO;
+using MCPForUnity.Editor.Services;
+using MCPForUnity.Editor.Services.Transport;
 using UnityEditor;
 using UnityEngine;
 
@@ -31,6 +33,12 @@ namespace MCPForUnityLauncher.Editor
                 EditorGUILayout.HelpBox("当前使用 HTTP Remote，Launcher 保留远程设置，不启动本地服务。", MessageType.Info);
             else
                 EditorGUILayout.SelectableLabel("MCP 地址：" + LauncherBootstrap.BaseUrl.TrimEnd('/') + "/mcp", GUILayout.Height(20));
+
+            var client = MCPServiceLocator.TransportManager.GetClient(TransportMode.Http);
+            EditorGUILayout.LabelField("当前项目连接", client != null && client.IsConnected ? "已连接" :
+                LauncherBootstrap.CanManageLocalServer ? "未连接 / 等待自动连接" : "未连接");
+            if (!string.IsNullOrEmpty(client?.State?.SessionId) && client.State.SessionId != "pending")
+                EditorGUILayout.LabelField("会话 ID", client.State.SessionId);
 
             if (!string.IsNullOrEmpty(LauncherBootstrap.LastError))
                 EditorGUILayout.HelpBox(LauncherBootstrap.LastError, MessageType.Warning);

@@ -27,7 +27,7 @@ To verify optional dependency compilation and the Launcher menu using a licensed
 python tools/verify_unity.py --unity-executable "C:\Program Files\Unity\Hub\Editor\2022.3.22f1\Editor\Unity.exe" --mcp-package "C:\path\to\unity-mcp\MCPForUnity" --output .compile\dependency-check
 ```
 
-The output directory must be new. This creates isolated projects with and without MCP for Unity, checks compilation, assembly activation, the menu window, and missing-dependency prompt deduplication, and preserves logs. It modifies no existing Unity project. The supplied MCP package's own dependencies use Unity's normal package resolution. Batch checks do not start Launcher services or validate the installation buttons visually.
+The output directory must be new. This creates isolated projects with and without MCP for Unity, checks compilation, assembly activation, the menu window, and missing-dependency prompt deduplication, and preserves logs. The present-dependency scenario also uses upstream bridge and transport services with test transport clients to check automatic project connection, retry delays, stopped-session recovery, endpoint changes, and preservation of upstream reconnection. It restores changed EditorPrefs. It modifies no existing Unity project. The supplied MCP package's own dependencies use Unity's normal package resolution. These batch checks do not start Launcher services, open a real WebSocket, or validate the installation buttons visually.
 
 The build creates a VPM ZIP, a UnityPackage, a staged `package.json`, SHA-256 checksums, and `dist/UserPackages/com.vrclearn.mcp-for-unity-launcher`. Add that folder as a local user package in VCC, or install it with the [VPM CLI](https://vcc.docs.vrchat.com/vpm/cli/):
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Connect the Unity project through the actual WebSocket handshake without a blocking TCP pre-check; retry initial failures and resume stopped sessions while preserving upstream socket reconnection.
+- Attempt project connection even when supervisor launch fails, and display project connection and session ID separately from server status.
 - Show VPM and UPM installation instructions when MCP for Unity is missing or incompatible, with no missing-dependency compilation errors.
 - Enable the service integration only when a compatible MCP for Unity package is installed.
 

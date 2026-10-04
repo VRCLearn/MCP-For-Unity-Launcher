@@ -74,6 +74,7 @@ namespace MCPForUnityLauncher.Editor
         private static string _lastLeaseJson;
         private static string _lastReleaseJson;
         private static string _lastError;
+        private static string _lastConnectionError;
         private static int _processId;
         private static string _processStart;
         private static double _nextTick;
@@ -87,7 +88,7 @@ namespace MCPForUnityLauncher.Editor
         private static bool _quitting;
         private static Process _launchProcess;
 
-        internal static string LastError => _lastError;
+        internal static string LastError => _lastError ?? _lastConnectionError;
         internal static string LogDirectory => StateDirectory;
         internal static string LaunchLogPath => Path.Combine(StateDirectory, "supervisor.log");
         internal static bool HasSupervisorLaunch => _launchProcess != null;
@@ -202,8 +203,14 @@ namespace MCPForUnityLauncher.Editor
                     _nextConnect = 0;
                 }
                 _lastLocalUrl = BaseUrl;
-                WriteLease();
-                EnsureSupervisor();
+                // A running server can accept this project even if local launch fails.
+                try
+                {
+                    WriteLease();
+                    EnsureSupervisor();
+                    _lastError = null;
+                }
+                catch (Exception exception) { SetError(exception.Message); }
                 TryConnect();
             }
             catch (Exception exception) { SetError(exception.Message); }
@@ -331,12 +338,17 @@ namespace MCPForUnityLauncher.Editor
             {
                 _connectedOnce = true;
                 _connectFailures = 0;
-                _lastError = null;
+                _lastConnectionError = null;
                 return;
             }
-            // Once connected, upstream owns its indefinite socket reconnection loop.
+            // Explicit Stop/ForceStop clears the transport error and cancels upstream
+            // reconnection. Resume automatic management in that case.
+            if (client == null || (!client.IsConnected && string.IsNullOrEmpty(client.State?.Error)))
+                _connectedOnce = false;
+            // A socket failure retains an error while upstream owns its reconnect loop.
             if (_connectedOnce || EditorApplication.timeSinceStartup < _nextConnect) return;
-            if (!_wrapper.Original.IsLocalHttpServerReachable()) return;
+            // Use the real WebSocket handshake: a short synchronous TCP probe must
+            // not silently prevent project registration with a reachable server.
             _ = ConnectAsync(Lifetime.Token);
         }
 
@@ -345,6 +357,7 @@ namespace MCPForUnityLauncher.Editor
             _connectInFlight = true;
             try
             {
+                string requestedUrl = BaseUrl;
                 if (token.IsCancellationRequested || !Enabled || IsRemote) return;
                 bool connected = await MCPServiceLocator.Bridge.StartAsync();
                 if (token.IsCancellationRequested) return;
@@ -353,18 +366,26 @@ namespace MCPForUnityLauncher.Editor
                     await MCPServiceLocator.TransportManager.StopAsync(TransportMode.Http);
                     return;
                 }
+                if (BaseUrl != requestedUrl)
+                {
+                    _connectedOnce = false;
+                    _needsNewEndpoint = true;
+                    _nextConnect = 0;
+                    return;
+                }
                 _connectedOnce = connected;
                 if (connected)
                 {
                     _needsNewEndpoint = false;
                     _connectFailures = 0;
-                    _lastError = null;
+                    _lastConnectionError = null;
+                    Debug.Log(LogPrefix + "当前 Unity 项目已自动连接到 " + requestedUrl + "。");
                 }
                 else
                 {
                     _connectFailures++;
                     _nextConnect = EditorApplication.timeSinceStartup + Math.Min(30, 5 * _connectFailures);
-                    SetError("MCP 服务已启动，但编辑器连接失败；将自动重试。");
+                    SetConnectionError("当前 Unity 项目尚未连接到 MCP 服务；将自动重试。");
                 }
             }
             catch (Exception exception)
@@ -373,7 +394,7 @@ namespace MCPForUnityLauncher.Editor
                 {
                     _connectFailures++;
                     _nextConnect = EditorApplication.timeSinceStartup + Math.Min(30, 5 * _connectFailures);
-                    SetError(exception.Message);
+                    SetConnectionError(exception.Message);
                 }
             }
             finally { _connectInFlight = false; }
@@ -444,6 +465,13 @@ namespace MCPForUnityLauncher.Editor
         {
             if (_lastError == error) return;
             _lastError = error;
+            Debug.LogWarning(LogPrefix + error);
+        }
+
+        private static void SetConnectionError(string error)
+        {
+            if (_lastConnectionError == error) return;
+            _lastConnectionError = error;
             Debug.LogWarning(LogPrefix + error);
         }
 

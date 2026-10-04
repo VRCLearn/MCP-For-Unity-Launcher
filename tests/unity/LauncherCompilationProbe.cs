@@ -49,6 +49,8 @@ public static class LauncherCompilationProbe
                 Debug.Log("LAUNCHER_PROMPT_DEDUP: passed");
             }
 
+            if (integration)
+                Type.GetType("LauncherConnectionProbe, Assembly-CSharp-Editor", true).GetMethod("Run").Invoke(null, null);
             Debug.Log("LAUNCHER_VERIFICATION: passed");
             EditorApplication.Exit(0);
         }
