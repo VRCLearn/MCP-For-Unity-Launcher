@@ -1,0 +1,39 @@
+name: Validate package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Windows / Python ${{ matrix.python }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run supervisor and distribution tests
+        run: python -m unittest discover -s tests -v
+      - name: Build and validate release archives
+        shell: pwsh
+        env:
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          RELEASE_REVISION: ${{ github.sha }}
+        run: |
+          $metadata = Get-Content -Raw Packages/com.vrclearn.mcp-for-unity-launcher/package.json | ConvertFrom-Json
+          $url = "https://github.com/$env:RELEASE_REPOSITORY/releases/download/$($metadata.version)/$($metadata.name)-$($metadata.version).zip"
+          python tools/build_package.py --output dist --download-url $url --repository $env:RELEASE_REPOSITORY --revision $env:RELEASE_REVISION
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

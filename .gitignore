@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+dist/
+.test-state/
+.compile/
+.publish/
+TestProjects/**/Library/
+TestProjects/**/Logs/
+TestProjects/**/Temp/

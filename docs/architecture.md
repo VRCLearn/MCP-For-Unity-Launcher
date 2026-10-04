@@ -1,0 +1,30 @@
+# Lifecycle ownership
+
+The upstream Editor shutdown handler calls `StopManagedLocalHttpServer`. Its pidfile and instance-token handshake live in user-wide EditorPrefs. Multiple editors therefore read the same handshake despite running different projects. Upstream `StartLocalHttpServer` also tries to stop an existing local server before launching another one.
+
+Launcher installs an `IServerManagementService` decorator through the public `MCPServiceLocator.Register` API immediately on Editor domain initialization. Startup, manual stop, and managed shutdown are intercepted for supervised local lifecycle ownership. Ordinary helpers retain the captured original service implementation. The decorator never resolves itself through the locator when delegating.
+
+```mermaid
+flowchart LR
+    A[Unity project A + Launcher] -->|process registration| S[Independent supervisor]
+    B[Unity project B + Launcher] -->|process registration| S
+    S -->|owns and restarts| M[Shared MCP HTTP server]
+    A -->|WebSocket bridge| M
+    B -->|WebSocket bridge| M
+```
+
+The supervisor starts through the existing `uv` runtime using a package-contained Python script copied to a stable user data directory. It is not stopped during Unity assembly reload and is not attached to the first editor's shutdown handshake. Launch arguments reuse `AssetPathUtility` package-source and development-flag helpers; the package is not a second MCP server implementation.
+
+## State and safety boundaries
+
+The per-user state directory is `LocalApplicationData/MCP-For-Unity-Launcher`. Registration files contain editor PID, process creation time, project path, endpoint, and the configured server command. They are same-user local state, not a network command interface. Secrets are not added to status or log messages. Registration and status updates use atomic replacement.
+
+An operating-system file lock prevents concurrent supervisors. A valid registration is based on live process identity, not heartbeat age. Invalid JSON does not immediately discard a previously valid live editor. Shared endpoints with incompatible command sources are reported rather than repeatedly replacing one another.
+
+The server health response must identify itself as MCP for Unity, not merely return HTTP 200. Existing healthy services are marked unowned. Only processes created by the supervisor may be stopped. On Windows, a suspended child is assigned to a private kill-on-close Job Object before it is resumed, which prevents its descendants escaping during shutdown or supervisor failure. Other platforms use a separate process session/group where supported.
+
+Closing one editor releases only that editor's registration. Disabling management or switching to remote writes a `released: true` registration with the same PID and creation time. This explicitly removes a live registration while missing or malformed files remain tolerated during reloads. A new active registration overwrites that release record when management is reenabled. The last registered editor starts an idle grace period before owned service cleanup. A supervisor crash is detected by surviving editors; the next editor tick may launch a replacement, while the file lock prevents duplicates.
+
+Initial bridge connection is retried with a delay. Once connected, the upstream WebSocket transport's own reconnect loop remains responsible for transient disconnects. Calling StartAsync every tick would tear down that loop, so the addon avoids doing so.
+
+The package is per-project integration. Editors that have only MCP for Unity and do not have Launcher cannot be assumed to publish registrations or use the service decorator. Explicit global discovery is a separate capability.

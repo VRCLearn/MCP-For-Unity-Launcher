@@ -1,0 +1,24 @@
+{
+    "name": "MCP for Unity Launcher | VRCLearn",
+    "id": "com.vrclearn.mcp-for-unity-launcher",
+    "url": "https://vrclearn.github.io/MCP-For-Unity-Launcher/index.json",
+    "author": {
+        "name": "VRCLearn",
+        "url": "https://github.com/VRCLearn"
+    },
+    "description": "MCP for Unity and its Launcher, with automatic shared-server startup and recovery across Unity editors.",
+    "bannerUrl": "banner.png",
+    "infoLink": {
+        "text": "Source and documentation",
+        "url": "https://github.com/VRCLearn/MCP-For-Unity-Launcher"
+    },
+    "repository": "VRCLearn/MCP-For-Unity-Launcher",
+    "packages": {
+        "com.vrclearn.mcp-for-unity-launcher": "VRCLearn/MCP-For-Unity-Launcher",
+        "com.coplaydev.unity-mcp": "VRCLearn/unity-mcp"
+    },
+    "githubRepos": [
+        "VRCLearn/MCP-For-Unity-Launcher",
+        "VRCLearn/unity-mcp"
+    ]
+}

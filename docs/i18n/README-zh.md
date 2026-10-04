@@ -1,0 +1,51 @@
+# MCP for Unity Launcher
+
+[English](../../README.md) | **简体中文**
+
+这是配合 [MCP for Unity](https://github.com/VRCLearn/unity-mcp) 使用的 VPM 扩展包，让本地 MCP 服务随 Unity 项目自动启动，并在多个编辑器之间持续运行。
+
+- **自动启动**：打开项目后，自动启动 MCP 服务并连接 Unity 编辑器。
+- **多编辑器共用**：A 和 B 使用同一服务时，关闭 A，B 仍能继续使用。
+- **异常恢复**：受管理的服务退出或停止响应后自动重启；守护进程退出后，由仍在运行的编辑器重新启动。
+
+**每个需要这些功能的项目都必须安装 Launcher。** 只安装 MCP for Unity 的项目仍沿用原来的启动和关闭方式。
+
+## 安装
+
+需要 Unity 2021.3 或更高版本以及 [uv](https://docs.astral.sh/uv/getting-started/installation/)。Launcher 依赖 MCP for Unity 10.3.x；首版面向 Windows。
+
+1. 如果尚未安装 uv，先按官方说明安装。安装后重启 Unity，让编辑器能够找到 `uv` 和 `uvx`。
+2. 打开 [VPM 安装页面](https://vrclearn.github.io/MCP-For-Unity-Launcher/)，点击 **Add to VCC/ALCOMD**，或手动添加仓库地址：
+
+   ```text
+   https://vrclearn.github.io/MCP-For-Unity-Launcher/index.json
+   ```
+
+   这一个仓库同时提供 **MCP for Unity** 和 **MCP for Unity Launcher**，无需分别添加两个仓库。
+3. 在每个项目的包管理页面安装 **MCP for Unity Launcher**（`com.vrclearn.mcp-for-unity-launcher`）。VPM 会从同一个仓库安装它依赖的 MCP for Unity。
+4. 打开项目，在 **Window → MCP for Unity** 中使用 **HTTP Local**，并完成一次 AI 客户端的 HTTP 连接配置。默认地址为 `http://127.0.0.1:8080/mcp`。
+
+此后，Launcher 会自动启动本地服务并连接编辑器，不需要每次手动点击启动。首次运行可能需要等待 uv 下载 Python 和服务依赖；AI 客户端仍需配置自己的 MCP 连接。
+
+## 同时使用多个 Unity 编辑器
+
+在项目 A 和 B 中都安装这两个包，并使用相同的本地服务地址。打开两个项目后，关闭 A，共享服务仍供 B 使用。最后一个受管理的编辑器关闭后，Launcher 会等待 10 秒，再结束由它启动的服务。
+
+打开 **Window → MCP for Unity Launcher**，可以查看服务状态、参与的编辑器和日志。窗口中的自动管理开关只影响当前项目。
+
+## 使用范围与验证情况
+
+Launcher 管理本地 HTTP 服务。远程 HTTP 服务沿用原来的管理方式；已有的外部服务可以被使用，但 Launcher 不会接管或结束其进程。
+
+0.1.0 已通过 Windows 进程测试、基于 Unity 2022.3.22f1 和 MCP for Unity 10.3.0 的 C# 编译，以及真实 MCP 服务的生命周期检查。两个真实 Unity 编辑器中的交互行为及其他操作系统尚未验证。详情见 [验证记录](../verification.md)。
+
+## 下载与文档
+
+- [版本下载](https://github.com/VRCLearn/MCP-For-Unity-Launcher/releases)：包含 VPM ZIP、UnityPackage 和包信息。推荐使用 VPM；导入 UnityPackage 时需要单独安装 MCP for Unity。同一项目只使用一种安装方式。
+- [开发与发布](../development.md)
+- [实现原理](../architecture.md)
+- [反馈问题](https://github.com/VRCLearn/MCP-For-Unity-Launcher/issues)
+
+## 许可证
+
+[MIT](../../LICENSE)。MCP for Unity 是独立依赖，由其贡献者维护。

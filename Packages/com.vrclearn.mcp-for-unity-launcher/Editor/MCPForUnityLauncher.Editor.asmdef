@@ -1,0 +1,8 @@
+{
+    "name": "MCPForUnityLauncher.Editor",
+    "rootNamespace": "MCPForUnityLauncher.Editor",
+    "references": ["MCPForUnity.Editor"],
+    "includePlatforms": ["Editor"],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}
