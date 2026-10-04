@@ -1,6 +1,6 @@
 # MCP for Unity Launcher
 
-[English](../../README.md) | **简体中文**
+[English](../../README.md) | [日本語](README-ja.md) | [한국어](README-ko.md) | [繁體中文](README-zh-TW.md) | **简体中文**
 
 这是配合 [MCP for Unity](https://github.com/VRCLearn/unity-mcp) 使用的 VPM 扩展包，让本地 MCP 服务随 Unity 项目自动启动，并在多个编辑器之间持续运行。
 

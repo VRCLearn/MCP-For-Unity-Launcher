@@ -1,6 +1,6 @@
 # MCP for Unity Launcher
 
-**English** | [简体中文](docs/i18n/README-zh.md)
+**English** | [日本語](docs/i18n/README-ja.md) | [한국어](docs/i18n/README-ko.md) | [繁體中文](docs/i18n/README-zh-TW.md) | [简体中文](docs/i18n/README-zh.md)
 
 A VPM addon for [MCP for Unity](https://github.com/VRCLearn/unity-mcp) that starts its local server when you open a Unity project and keeps it running across multiple editors.
 
