@@ -2,7 +2,7 @@
 
 [English](../../README.md) | [日本語](README-ja.md) | [한국어](README-ko.md) | **繁體中文** | [简体中文](README-zh.md)
 
-這是搭配 [MCP for Unity](https://github.com/VRCLearn/unity-mcp) 使用的 VPM 擴充套件，讓本機 MCP 伺服器隨 Unity 專案自動啟動，並在多個編輯器之間持續運作。
+這是搭配 [MCP for Unity](https://github.com/VRCLearn/unity-mcp) 使用的 Unity 編輯器擴充套件，可透過 VPM 或 UPM 安裝，讓本機 MCP 伺服器隨 Unity 專案自動啟動，並在多個編輯器之間持續運作。
 
 - **自動啟動**：開啟專案後，自動啟動伺服器並連接 Unity 編輯器橋接功能。
 - **多編輯器共用**：A 和 B 使用同一個伺服器時，關閉 A 後，B 仍能繼續使用。
@@ -13,6 +13,8 @@
 ## 安裝
 
 需要 Unity 2021.3 或更新版本，以及 [uv](https://docs.astral.sh/uv/getting-started/installation/)。Launcher 相依於 MCP for Unity 10.3.x；首版以 Windows 為目標平台。
+
+### VPM
 
 1. 如果尚未安裝 uv，請先依照官方說明安裝。安裝後重新啟動 Unity，讓編輯器能夠找到 `uv` 和 `uvx`。
 2. 開啟 [VPM 安裝頁面](https://vrclearn.github.io/MCP-For-Unity-Launcher/)，點選 **Add to VCC/ALCOMD**，或手動新增套件存放庫網址：
@@ -27,6 +29,22 @@
 
 此後，Launcher 會自動啟動本機伺服器並連接編輯器。首次執行可能需要等待 uv 下載 Python 和伺服器的相依套件；AI 用戶端仍需另外設定 MCP 連線。
 
+### UPM（任何 Unity 專案）
+
+透過 UPM 安裝不需要 VRChat、VCC 或 ALCOMD。
+
+1. 安裝 uv 並重新啟動 Unity，讓編輯器能夠找到 `uv` 和 `uvx`。
+2. 依照 [MCP for Unity 安裝說明](https://github.com/VRCLearn/unity-mcp)，在同一個專案中安裝 **MCP for Unity 10.3.x**。UPM 不會解析本套件的 `vpmDependencies`，因此請先單獨安裝相依套件，再安裝 Launcher。
+3. 開啟 **Window → Package Manager**，選擇 **+ → Add package from git URL**，輸入：
+
+   ```text
+   https://github.com/VRCLearn/MCP-For-Unity-Launcher.git?path=/Packages/com.vrclearn.mcp-for-unity-launcher#main
+   ```
+
+4. 在 **Window → MCP for Unity** 中使用 **HTTP Local**，並設定 AI 用戶端的 HTTP 連線。預設端點為 `http://127.0.0.1:8080/mcp`。
+
+每個參與的專案都需要安裝 Launcher。此 Git 網址指向 `main` 的套件子目錄；同一個專案請只使用一種安裝方式。
+
 ## 同時使用多個 Unity 編輯器
 
 在專案 A 和 B 中都安裝這兩個套件，並使用相同的本機伺服器位址。開啟兩個專案後，即使關閉 A，共用伺服器仍可供 B 使用。最後一個受管理的編輯器關閉後，Launcher 會等待 10 秒，再結束由它啟動的伺服器。
@@ -37,7 +55,7 @@
 
 Launcher 管理本機 HTTP 服務。遠端 HTTP 設定沿用原本的管理方式；現有的外部伺服器可以繼續使用，但 Launcher 不會接管其程序。
 
-0.1.0 已通過 Windows 程序測試、使用 Unity 2022.3.22f1 和 MCP for Unity 10.3.0 的 C# 編譯，以及實際 MCP 伺服器的生命週期檢查。兩個實際 Unity 編輯器中的互動行為及其他作業系統尚未驗證。詳情請見[驗證記錄](../verification.md)。
+0.1.0 已通過 Windows 程序測試、使用 Unity 2022.3.22f1 和 MCP for Unity 10.3.0 的 C# 編譯，以及實際 MCP 伺服器的生命週期檢查。UPM Git 安裝、兩個實際 Unity 編輯器中的互動行為及其他作業系統尚未驗證。詳情請見[驗證記錄](../verification.md)。
 
 ## 下載與文件
 

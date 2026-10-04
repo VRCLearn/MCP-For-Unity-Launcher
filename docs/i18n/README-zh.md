@@ -2,7 +2,7 @@
 
 [English](../../README.md) | [日本語](README-ja.md) | [한국어](README-ko.md) | [繁體中文](README-zh-TW.md) | **简体中文**
 
-这是配合 [MCP for Unity](https://github.com/VRCLearn/unity-mcp) 使用的 VPM 扩展包，让本地 MCP 服务随 Unity 项目自动启动，并在多个编辑器之间持续运行。
+这是配合 [MCP for Unity](https://github.com/VRCLearn/unity-mcp) 使用的 Unity 编辑器扩展包，可通过 VPM 或 UPM 安装，让本地 MCP 服务随 Unity 项目自动启动，并在多个编辑器之间持续运行。
 
 - **自动启动**：打开项目后，自动启动 MCP 服务并连接 Unity 编辑器。
 - **多编辑器共用**：A 和 B 使用同一服务时，关闭 A，B 仍能继续使用。
@@ -13,6 +13,8 @@
 ## 安装
 
 需要 Unity 2021.3 或更高版本以及 [uv](https://docs.astral.sh/uv/getting-started/installation/)。Launcher 依赖 MCP for Unity 10.3.x；首版面向 Windows。
+
+### VPM
 
 1. 如果尚未安装 uv，先按官方说明安装。安装后重启 Unity，让编辑器能够找到 `uv` 和 `uvx`。
 2. 打开 [VPM 安装页面](https://vrclearn.github.io/MCP-For-Unity-Launcher/)，点击 **Add to VCC/ALCOMD**，或手动添加仓库地址：
@@ -27,6 +29,22 @@
 
 此后，Launcher 会自动启动本地服务并连接编辑器，不需要每次手动点击启动。首次运行可能需要等待 uv 下载 Python 和服务依赖；AI 客户端仍需配置自己的 MCP 连接。
 
+### UPM（任何 Unity 项目）
+
+通过 UPM 安装不需要 VRChat、VCC 或 ALCOMD。
+
+1. 安装 uv 并重启 Unity，让编辑器能够找到 `uv` 和 `uvx`。
+2. 按照 [MCP for Unity 安装说明](https://github.com/VRCLearn/unity-mcp)，在同一个项目中安装 **MCP for Unity 10.3.x**。UPM 不会解析本包的 `vpmDependencies`，因此请先单独安装依赖，再安装 Launcher。
+3. 打开 **Window → Package Manager**，选择 **+ → Add package from git URL**，输入：
+
+   ```text
+   https://github.com/VRCLearn/MCP-For-Unity-Launcher.git?path=/Packages/com.vrclearn.mcp-for-unity-launcher#main
+   ```
+
+4. 在 **Window → MCP for Unity** 中使用 **HTTP Local**，并配置 AI 客户端的 HTTP 连接。默认地址为 `http://127.0.0.1:8080/mcp`。
+
+每个参与的项目都需要安装 Launcher。此 Git 地址指向 `main` 的包子目录；同一项目请只使用一种安装方式。
+
 ## 同时使用多个 Unity 编辑器
 
 在项目 A 和 B 中都安装这两个包，并使用相同的本地服务地址。打开两个项目后，关闭 A，共享服务仍供 B 使用。最后一个受管理的编辑器关闭后，Launcher 会等待 10 秒，再结束由它启动的服务。
@@ -37,7 +55,7 @@
 
 Launcher 管理本地 HTTP 服务。远程 HTTP 服务沿用原来的管理方式；已有的外部服务可以被使用，但 Launcher 不会接管或结束其进程。
 
-0.1.0 已通过 Windows 进程测试、基于 Unity 2022.3.22f1 和 MCP for Unity 10.3.0 的 C# 编译，以及真实 MCP 服务的生命周期检查。两个真实 Unity 编辑器中的交互行为及其他操作系统尚未验证。详情见 [验证记录](../verification.md)。
+0.1.0 已通过 Windows 进程测试、基于 Unity 2022.3.22f1 和 MCP for Unity 10.3.0 的 C# 编译，以及真实 MCP 服务的生命周期检查。UPM Git 安装、两个真实 Unity 编辑器中的交互行为及其他操作系统尚未验证。详情见 [验证记录](../verification.md)。
 
 ## 下载与文档
 

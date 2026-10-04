@@ -2,7 +2,7 @@
 
 [English](../../README.md) | [日本語](README-ja.md) | **한국어** | [繁體中文](README-zh-TW.md) | [简体中文](README-zh.md)
 
-[MCP for Unity](https://github.com/VRCLearn/unity-mcp)를 위한 VPM 확장 패키지입니다. Unity 프로젝트를 열면 로컬 서버를 자동으로 시작하고, 여러 에디터가 서버를 공유하는 동안 계속 실행되도록 유지합니다.
+[MCP for Unity](https://github.com/VRCLearn/unity-mcp)를 위한 Unity 에디터 확장 패키지이며, VPM 또는 UPM으로 설치할 수 있습니다. Unity 프로젝트를 열면 로컬 서버를 자동으로 시작하고, 여러 에디터가 서버를 공유하는 동안 계속 실행되도록 유지합니다.
 
 - **자동 시작**: 프로젝트를 열면 서버를 시작하고 Unity 브리지를 연결합니다.
 - **서버 공유**: A와 B가 같은 서버를 사용할 때 A를 닫아도 B는 서버를 계속 사용할 수 있습니다.
@@ -13,6 +13,8 @@
 ## 설치
 
 Unity 2021.3 이상과 [uv](https://docs.astral.sh/uv/getting-started/installation/)가 필요합니다. Launcher는 MCP for Unity 10.3.x에 의존합니다. 초기 대상 플랫폼은 Windows입니다.
+
+### VPM
 
 1. uv가 설치되어 있지 않다면 공식 안내에 따라 설치하세요. 설치 후 Unity를 다시 시작하여 에디터가 `uv`와 `uvx`를 찾을 수 있도록 합니다.
 2. [VPM 설치 페이지](https://vrclearn.github.io/MCP-For-Unity-Launcher/)를 열고 **Add to VCC/ALCOMD**를 클릭하거나, 다음 저장소 URL을 직접 추가하세요.
@@ -27,6 +29,22 @@ Unity 2021.3 이상과 [uv](https://docs.astral.sh/uv/getting-started/installati
 
 이후 Launcher가 로컬 서버를 시작하고 에디터를 자동으로 연결합니다. 처음 실행할 때는 uv가 Python과 서버 종속 패키지를 다운로드하므로 시간이 더 걸릴 수 있습니다. AI 클라이언트의 MCP 연결은 별도로 설정해야 합니다.
 
+### UPM (모든 Unity 프로젝트)
+
+UPM으로 설치할 때는 VRChat, VCC, ALCOMD가 필요하지 않습니다.
+
+1. uv를 설치하고 Unity를 다시 시작하여 에디터가 `uv`와 `uvx`를 찾을 수 있도록 합니다.
+2. [MCP for Unity 설치 안내](https://github.com/VRCLearn/unity-mcp)에 따라 같은 프로젝트에 **MCP for Unity 10.3.x**를 설치하세요. UPM은 이 패키지의 `vpmDependencies`를 처리하지 않으므로 Launcher보다 먼저 종속 패키지를 별도로 설치해야 합니다.
+3. **Window → Package Manager**를 열고 **+ → Add package from git URL**을 선택한 뒤 다음 URL을 입력하세요.
+
+   ```text
+   https://github.com/VRCLearn/MCP-For-Unity-Launcher.git?path=/Packages/com.vrclearn.mcp-for-unity-launcher#main
+   ```
+
+4. **Window → MCP for Unity**에서 **HTTP Local**을 사용하고 AI 클라이언트의 HTTP 연결을 설정하세요. 기본 엔드포인트는 `http://127.0.0.1:8080/mcp`입니다.
+
+참여하는 각 프로젝트에 Launcher를 설치하세요. 이 Git URL은 `main`의 패키지 하위 디렉터리를 지정합니다. 한 프로젝트에서는 한 가지 설치 방법만 사용하세요.
+
 ## 여러 에디터에서 사용하기
 
 프로젝트 A와 B에 두 패키지를 모두 설치하고 같은 로컬 서버 주소를 사용하세요. 두 프로젝트를 연 뒤 A를 닫아도 B는 공유 서버를 계속 사용할 수 있습니다. 마지막 관리 대상 에디터를 닫으면 Launcher는 10초의 유예 시간이 지난 후 자신이 시작한 서버를 종료합니다.
@@ -37,7 +55,7 @@ Unity 2021.3 이상과 [uv](https://docs.astral.sh/uv/getting-started/installati
 
 Launcher는 로컬 HTTP 서비스를 관리합니다. 원격 HTTP 설정은 기존 관리 방식을 유지합니다. 이미 실행 중인 외부 서버는 재사용하지만 해당 프로세스의 관리 권한을 가져오지는 않습니다.
 
-버전 0.1.0은 Windows 프로세스 테스트, Unity 2022.3.22f1 및 MCP for Unity 10.3.0을 사용한 C# 컴파일, 실제 서버의 수명 주기 검증을 통과했습니다. 실제로 실행 중인 두 Unity 에디터에서의 상호작용과 다른 운영체제에서의 동작은 아직 검증되지 않았습니다. 자세한 내용은 [검증 기록](../verification.md)을 확인하세요.
+버전 0.1.0은 Windows 프로세스 테스트, Unity 2022.3.22f1 및 MCP for Unity 10.3.0을 사용한 C# 컴파일, 실제 서버의 수명 주기 검증을 통과했습니다. UPM Git 설치, 실제로 실행 중인 두 Unity 에디터에서의 상호작용, 다른 운영체제에서의 동작은 아직 검증되지 않았습니다. 자세한 내용은 [검증 기록](../verification.md)을 확인하세요.
 
 ## 다운로드 및 문서
 
