@@ -17,13 +17,17 @@ def prepare():
     result = build(output, url, repository=repository, revision=revision)
     notes = f'''MCP for Unity Launcher {version} starts and manages MCP for Unity's local HTTP service automatically.
 
+This patch prevents healthy servers from restarting when MCP for Unity's periodic uv cache probe adds or removes `--offline`. Editors with different cache probe results can share the same server. Actual server configuration changes and crash recovery continue to work.
+
+After updating, close all Unity Editors using Launcher, wait about 15 seconds, then reopen your projects so the shared supervisor loads the updated code.
+
 - Starts the service and connects Unity when a project opens.
 - Keeps a shared service running when one of several participating editors closes.
 - Recovers the service and supervisor after unexpected failures.
 - Retries project connection and resumes stopped sessions, with connection status and session ID shown separately.
 - Supports English, Japanese, Korean, Traditional Chinese, and Simplified Chinese UI selection; technical diagnostics stay in English.
 - Provides VPM and UPM installation guidance when MCP for Unity is missing, without dependency-related compilation errors.
-- Adds native macOS process identities and Linux/macOS child-process cleanup after supervisor crashes.
+- Uses native macOS process identities and cleans up Linux/macOS child processes after supervisor crashes.
 - Gates publication on process, C#/Python identity, and packaging checks on Windows, macOS, and Linux with Python 3.10 and 3.12.
 
 Install **MCP for Unity Launcher** in each project from the [VPM repository](https://vrclearn.github.io/MCP-For-Unity-Launcher/). MCP for Unity is included as a dependency.

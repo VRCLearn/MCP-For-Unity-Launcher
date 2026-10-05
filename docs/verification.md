@@ -1,5 +1,12 @@
 # Verification
 
+## Cache-policy restart regression — 2026-10-06 (0.3.1)
+
+- Windows and Ubuntu 24.04 under WSL each passed the 78-test suite. The unchanged standalone C# identity probe was skipped locally; Windows also skipped the POSIX-only paused-guardian check. The VPM ZIP and UnityPackage build and structural validation passed.
+- Regression checks reproduce 30-second `--offline` probe flips while a service is healthy, starting, unhealthy, or waiting for recovery. Running processes and their health/startup timers are preserved; backoff is retained and the next recovery launch uses the latest full command.
+- Editors with different cache probe results share one owned server, and an existing external server remains unowned. Actual source/version changes, forced refresh flags, tool-scoping changes, and an `--offline` value outside the leading uvx flag retain their configuration semantics and conflict handling.
+- These checks use independent temporary state directories and process fixtures. No running user Unity project or shared supervisor was modified. No C# code changed; native Unity checks and macOS CI were not rerun for this local patch.
+
 ## Cross-platform process checks — 2026-10-05 (0.3.0)
 
 - Windows and Ubuntu 24.04 under WSL each completed the 70-test suite. The standalone C# interop probe was not built locally and was skipped; Windows also skipped the POSIX-only paused-guardian check.

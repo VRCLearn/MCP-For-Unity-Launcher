@@ -59,6 +59,8 @@
 
 Launcher 管理本機 HTTP 服務。遠端 HTTP 設定沿用原本的管理方式；現有的外部伺服器可以繼續使用，但 Launcher 不會接管其程序。
 
+0.3.1 修復快取檢查結果變化時不必要地重啟正常伺服器的問題。更新後請關閉所有使用 Launcher 的 Unity Editor，等待約 15 秒，再重新開啟專案以載入更新後的監督程序。
+
 0.3.0 新增 macOS 原生程序身分檢查，以及監督程序結束時的 Linux/macOS 子程序清理。CI 在三個系統上檢查程序管理、C#/Python 身分資訊相容性與發佈封裝。Unity Editor 的驗證環境是 Windows 與 Unity 2022.3.22f1；多個 Editor 的互動操作及 macOS/Linux 上的 Unity 行為尚未驗證。詳情請見[驗證記錄](../verification.md)。
 
 ## 下載與文件

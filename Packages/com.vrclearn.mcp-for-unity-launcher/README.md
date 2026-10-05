@@ -1,5 +1,7 @@
 # MCP for Unity Launcher
 
+Version 0.3.1 prevents cache-probe changes from restarting healthy servers. After updating, close all Unity Editors using Launcher, wait about 15 seconds, then reopen your projects to load the updated supervisor.
+
 Install this Unity package through VPM or UPM in every participating project alongside MCP for Unity 10.3.x. On opening a project, Launcher automatically starts a shared local HTTP server and connects the Editor bridge. An independent supervisor keeps the server alive while registered editors remain and restarts owned processes after failures.
 
 Requirements: Unity 2021.3 or later and an installed `uv`/`uvx` runtime configured in MCP for Unity. Initial Python and server downloads may require network access. Desktop platform targets are Windows, macOS, and Linux; see the repository's verification record for native Unity validation limits.

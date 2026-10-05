@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Preserve running servers when the upstream uv cache probe adds or removes its leading `--offline` flag. Apply the latest cache policy only when another launch is needed, without resetting health checks or recovery backoff.
+- Allow editors with different cache probe results to share the same server while retaining conflict detection for actual server configuration changes.
+
 ## 0.3.0
 
 - Use the same native Linux boot-time and clock-tick identity in C# and Python, avoiding runtime-dependent `Process.StartTime` offsets.

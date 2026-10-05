@@ -49,6 +49,7 @@ def lease_data(pid=111, start="123456", port=48123, arguments=None):
 class FakeProcess:
     def __init__(self, executable, args):
         self.pid, self.exit_code, self.closed = 999, None, False
+        self.command = executable, tuple(args)
 
     def poll(self):
         return self.exit_code
@@ -284,6 +285,138 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(len(self.spawned), 2)
         self.tick(3)
         self.assertEqual(len(self.spawned), 2)
+
+    def test_offline_probe_flips_preserve_healthy_server(self):
+        arguments = ["--from", "mcpforunityserver==10.3.0", "mcp-for-unity"]
+        self.write(arguments=arguments)
+        self.tick()
+        original = self.spawned[0]
+        self.health = True
+        self.tick(1)
+        for now, offline in ((30, True), (60, False), (90, True)):
+            latest = ["--offline", *arguments] if offline else arguments
+            self.write(arguments=latest)
+            self.tick(now)
+            self.assertIs(self.service().process, original)
+            self.assertFalse(original.closed)
+            self.assertEqual(self.service().state, "healthy")
+            self.assertEqual(self.service().healthy_since, 1)
+            self.assertEqual(self.service().restart_count, 1)
+            self.assertEqual(self.service().command[1], tuple(latest))
+        self.assertEqual(len(self.spawned), 1)
+
+    def test_offline_probe_flip_preserves_startup_deadline(self):
+        arguments = ["--from", "mcpforunityserver==10.3.0", "mcp-for-unity"]
+        self.write(arguments=arguments)
+        self.tick()
+        original = self.spawned[0]
+        self.write(arguments=["--offline", *arguments])
+        self.tick(299)
+        self.assertIs(self.service().process, original)
+        self.assertFalse(original.closed)
+        self.tick(300)
+        self.assertTrue(original.closed)
+        self.assertEqual(self.service().state, "backoff")
+        self.assertEqual(len(self.spawned), 1)
+
+    def test_offline_probe_flip_preserves_unhealthy_grace(self):
+        arguments = ["--from", "mcpforunityserver==10.3.0", "mcp-for-unity"]
+        self.write(arguments=arguments)
+        self.tick()
+        original = self.spawned[0]
+        self.health = True
+        self.tick(1)
+        self.health = False
+        self.tick(2)
+        self.write(arguments=["--offline", *arguments])
+        self.tick(11)
+        self.assertFalse(original.closed)
+        self.tick(12)
+        self.assertTrue(original.closed)
+        self.assertEqual(self.service().error, "MCP health check timed out")
+
+    def test_recovery_uses_latest_cache_policy_without_resetting_backoff(self):
+        arguments = ["--from", "mcpforunityserver==10.3.0", "mcp-for-unity"]
+        self.write(arguments=arguments)
+        self.tick()
+        self.spawned[0].exit_code = 3
+        self.tick(1)
+        self.assertEqual(self.service().retry_at, 3)
+        self.write(arguments=["--offline", *arguments])
+        self.tick(2)
+        self.assertEqual(len(self.spawned), 1)
+        self.assertEqual(self.service().retry_at, 3)
+        self.tick(3)
+        self.assertEqual(self.spawned[1].command[1], ("--offline", *arguments))
+        self.spawned[1].exit_code = 3
+        self.tick(4)
+        self.write(arguments=arguments)
+        self.tick(5)
+        self.assertEqual(self.service().retry_at, 8)
+        self.tick(8)
+        self.assertEqual(self.spawned[2].command[1], tuple(arguments))
+
+    def test_editors_with_different_cache_results_share_one_server(self):
+        arguments = ["--from", "mcpforunityserver==10.3.0", "mcp-for-unity"]
+        self.write(111, arguments=arguments)
+        self.tick()
+        original = self.spawned[0]
+        self.health = True
+        self.write(222, arguments=["--offline", *arguments])
+        self.tick(1)
+        self.assertEqual(self.service().state, "healthy")
+        self.alive.remove(111)
+        self.tick(2)
+        self.assertIs(self.service().process, original)
+        self.assertFalse(original.closed)
+        self.assertEqual(len(self.spawned), 1)
+
+    def test_real_config_changes_still_replace_owned_server(self):
+        configurations = [
+            ["--from", "mcpforunityserver==10.3.0", "mcp-for-unity"],
+            ["--offline", "--from", "mcpforunityserver==10.3.1", "mcp-for-unity"],
+            ["--no-cache", "--refresh", "--from", "mcpforunityserver==10.3.1", "mcp-for-unity"],
+            ["--from", "mcpforunityserver==10.3.1", "mcp-for-unity", "--project-scoped-tools"],
+            ["--from", "mcpforunityserver==10.3.1", "mcp-for-unity", "--project-scoped-tools", "--offline"],
+            ["--from", "--offline", "mcp-for-unity"],
+        ]
+        for now, arguments in enumerate(configurations):
+            if now:
+                self.health = True
+                self.tick(now - 0.1)
+                self.assertEqual(self.service().state, "healthy")
+                self.health = False
+            self.write(arguments=arguments)
+            self.tick(now)
+            self.assertEqual(len(self.spawned), now + 1)
+            self.assertEqual(self.spawned[-1].command[1], tuple(arguments))
+            if now:
+                self.assertTrue(self.spawned[-2].closed)
+
+    def test_offline_policy_does_not_hide_real_multi_editor_conflicts(self):
+        self.write(111, arguments=["--from", "mcpforunityserver==10.3.0", "mcp-for-unity"])
+        self.tick()
+        original = self.spawned[0]
+        self.write(222, arguments=["--offline", "--from", "mcpforunityserver==10.3.1", "mcp-for-unity"])
+        self.tick(1)
+        self.assertEqual(self.service().state, "conflict")
+        self.assertFalse(original.closed)
+        self.alive.remove(111)
+        self.tick(2)
+        self.assertTrue(original.closed)
+        self.assertEqual(len(self.spawned), 2)
+        self.assertIn("mcpforunityserver==10.3.1", self.spawned[1].command[1])
+
+    def test_offline_probe_flips_preserve_external_server(self):
+        arguments = ["--from", "mcpforunityserver==10.3.0", "mcp-for-unity"]
+        self.health = True
+        self.write(arguments=arguments)
+        self.tick()
+        self.write(arguments=["--offline", *arguments])
+        self.tick(1)
+        self.assertEqual(self.service().state, "healthy")
+        self.assertIsNone(self.service().process)
+        self.assertEqual(self.spawned, [])
 
     def test_atomic_status_read_contention_does_not_restart_owned_service(self):
         self.write()

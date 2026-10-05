@@ -59,6 +59,8 @@ Use the **Language** selector in either Launcher window to choose English, Japan
 
 Launcher manages local HTTP services. Remote HTTP configurations stay under their existing management, and existing external servers are reused without taking ownership of their processes.
 
+Version 0.3.1 prevents cache-probe changes from restarting healthy servers. After updating, close all Unity Editors using Launcher, wait about 15 seconds, then reopen your projects to load the updated supervisor.
+
 Version 0.3.0 adds native macOS process identities and Linux/macOS cleanup after supervisor crashes. CI checks process management, C#/Python identity interoperability, and release packaging on all three systems. Unity Editor checks use Windows and Unity 2022.3.22f1; interactive multi-Editor acceptance and native Unity behavior on macOS/Linux remain unverified. See the [verification record](docs/verification.md).
 
 ## Downloads and documentation

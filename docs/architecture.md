@@ -23,6 +23,8 @@ The supervisor starts through the existing `uv` runtime using a package-containe
 
 ## State and safety boundaries
 
+The upstream cache probe may add or remove a leading uvx `--offline` flag every 30 seconds. The supervisor ignores only that leading flag when comparing server configurations, so cache-policy changes neither interrupt a running service nor create conflicts between otherwise compatible editors. The latest full launch command is retained for the next necessary start; existing startup, health, and recovery timers are preserved. Package sources, versions, forced refresh flags, and server arguments remain part of configuration matching. An `--offline` value elsewhere in the command is not removed.
+
 The per-user state directory is `LocalApplicationData/MCP-For-Unity-Launcher`. Registration files contain editor PID, process creation time, project path, endpoint, and the configured server command. They are same-user local state, not a network command interface. Secrets are not added to status or log messages. Registration and status updates use atomic replacement.
 
 An operating-system file lock prevents concurrent supervisors. A valid registration is based on live process identity, not heartbeat age. Windows uses native process creation FILETIME, Linux reads `/proc` with clock-tick tolerance, and macOS reads the microsecond birth timestamp from `libproc`. On Linux and macOS the C# registration writer reads the same native timestamp as Python, avoiding runtime-dependent boot-time offsets and start-time precision. Invalid JSON does not immediately discard a previously valid live editor. Shared endpoints with incompatible command sources are reported rather than repeatedly replacing one another.

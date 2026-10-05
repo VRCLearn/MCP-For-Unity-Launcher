@@ -59,6 +59,8 @@
 
 Launcher 管理本地 HTTP 服务。远程 HTTP 服务沿用原来的管理方式；已有的外部服务可以被使用，但 Launcher 不会接管或结束其进程。
 
+0.3.1 修复缓存检查结果变化时不必要地重启正常服务器的问题。更新后请关闭所有使用 Launcher 的 Unity Editor，等待约 15 秒，再重新打开工程以加载更新后的监督进程。
+
 0.3.0 新增 macOS 原生进程身份检查，以及监督进程结束时的 Linux/macOS 子进程清理。CI 在三个系统上检查进程管理、C#/Python 身份信息兼容性及发布封装。Unity Editor 的验证环境是 Windows 和 Unity 2022.3.22f1；多个 Editor 的交互操作及 macOS/Linux 上的 Unity 行为尚未验证。详情见 [验证记录](../verification.md)。
 
 ## 下载与文档

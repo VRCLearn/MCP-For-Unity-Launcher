@@ -228,6 +228,14 @@ def normalize_url(value):
     return "http://{}:{}".format("[{}]".format(host) if ":" in host else host, port)
 
 
+def command_configuration(command):
+    """Ignore only the leading uvx cache-probe flag when comparing services."""
+    executable, arguments = command
+    # GetUvxDevFlagsList emits --offline before the package/server arguments.
+    # Keep the original command for launching and all other arguments literal.
+    return executable, arguments[1:] if arguments[:1] == ("--offline",) else arguments
+
+
 @dataclass(frozen=True)
 class Lease:
     process_id: int
@@ -631,12 +639,12 @@ class Supervisor:
             self.idle_since = now
         stopping = self.idle_since is not None and now - self.idle_since >= self.idle_seconds
         for base_url, registrations in groups.items():
-            commands = {lease.command for lease in registrations}
+            configurations = {command_configuration(lease.command) for lease in registrations}
             service = self.services.get(base_url)
             if not service:
                 service = self.services[base_url] = Service(base_url, registrations[0].command)
-            if len(commands) > 1 or service.command not in commands:
-                if len(commands) > 1:
+            if len(configurations) > 1 or command_configuration(service.command) not in configurations:
+                if len(configurations) > 1:
                     # Hold the existing service while contradictory sources remain.
                     # An exited parent still requires closing its owned child Job.
                     if service.process and service.process.poll() is not None:
@@ -649,10 +657,12 @@ class Supervisor:
                 if service.process:
                     service.process.close()
                     service.process = None
-                service.command = registrations[0].command
                 service.failures, service.retry_at = 0, 0
                 service.healthy_since = service.unhealthy_since = None
                 service.ever_healthy = False
+            # Cache policy can change without interrupting the current process
+            # or resetting its health/backoff timers. Use it on the next launch.
+            service.command = registrations[0].command
             self._service_tick(service, now)
         for base_url, service in list(self.services.items()):
             if base_url not in groups:
