@@ -1,6 +1,8 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -21,8 +23,33 @@ namespace MCPForUnityLauncher.Editor
         private static extern int QueryMacProcess(int pid, int flavor, ulong argument,
             out MacProcessInfo info, int size);
 
+        [DllImport("libc", EntryPoint = "sysconf", SetLastError = true)]
+        private static extern IntPtr LinuxSystemConfiguration(int name);
+
+        private static long LinuxStartFileTimeUtc(int pid)
+        {
+            string stat = File.ReadAllText("/proc/" + pid + "/stat");
+            string[] fields = stat.Substring(stat.LastIndexOf(')') + 2)
+                .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            long ticks = long.Parse(fields[19], CultureInfo.InvariantCulture);
+            // Linux _SC_CLK_TCK is 2; libc returns a native long.
+            long frequency = LinuxSystemConfiguration(2).ToInt64();
+            if (frequency <= 0)
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not query Linux clock frequency");
+            foreach (string line in File.ReadLines("/proc/stat"))
+            {
+                if (!line.StartsWith("btime ", StringComparison.Ordinal))
+                    continue;
+                long boot = long.Parse(line.Substring(6).Trim(), CultureInfo.InvariantCulture);
+                return checked(116444736000000000L + boot * 10000000L + ticks * 10000000L / frequency);
+            }
+            throw new IOException("Could not query Linux boot time");
+        }
+
         internal static long StartFileTimeUtc(Process process)
         {
+            if (Application.platform == RuntimePlatform.LinuxEditor)
+                return LinuxStartFileTimeUtc(process.Id);
             if (Application.platform != RuntimePlatform.OSXEditor)
                 return process.StartTime.ToUniversalTime().ToFileTimeUtc();
 

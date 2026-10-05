@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Use the same native Linux boot-time and clock-tick identity in C# and Python, avoiding runtime-dependent `Process.StartTime` offsets.
+
 - Add native macOS process identity checks using libproc, with matching microsecond timestamps in the Unity integration and Python supervisor.
 - Clean up owned Linux and macOS server process groups when the supervisor exits or is forcibly terminated, using a pipe-connected guardian.
 - Preserve descendants until group cleanup completes when the server leader exits, and resume a paused guardian when stopping an owned service.

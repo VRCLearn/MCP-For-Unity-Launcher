@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import socketserver
 import sys
 import time
 
@@ -60,4 +61,11 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+class LocalHTTPServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # A loopback fixture needs no reverse DNS, which can stall macOS CI.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address
+
+
+LocalHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
