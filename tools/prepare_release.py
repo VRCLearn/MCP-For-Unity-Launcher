@@ -20,8 +20,13 @@ def prepare():
 - Starts the service and connects Unity when a project opens.
 - Keeps a shared service running when one of several participating editors closes.
 - Recovers the service and supervisor after unexpected failures.
+- Retries project connection and resumes stopped sessions, with connection status and session ID shown separately.
+- Supports English, Japanese, Korean, Traditional Chinese, and Simplified Chinese UI selection; technical diagnostics stay in English.
+- Provides VPM and UPM installation guidance when MCP for Unity is missing, without dependency-related compilation errors.
 
 Install **MCP for Unity Launcher** in each project from the [VPM repository](https://vrclearn.github.io/MCP-For-Unity-Launcher/). MCP for Unity is included as a dependency.
+
+UPM installation is also available for any Unity project. Install MCP for Unity separately, then add the Launcher Git package using the [UPM instructions](https://github.com/VRCLearn/MCP-For-Unity-Launcher#upm-any-unity-project).
 
 Requires Unity 2021.3+, MCP for Unity 10.3.x, and uv. Windows is the initial supported platform. Configure your AI client's local HTTP connection once.
 

@@ -38,6 +38,16 @@ Unity 2022.3.22f1 compiled isolated projects with the current Launcher package a
 
 The 62 Python tests and both package builds also passed. Use the native verification command in [development](development.md) to reproduce the missing/present checks. These batch checks create real Editor windows but do not verify their visual appearance, installation-button interaction, or Git/VPM installation end to end. Launcher service behavior remains covered by the existing process tests and prior validation below.
 
+## 0.2.0 release validation
+
+The 0.2.0 release was checked on Windows on 2026-10-05:
+
+- All 62 supervisor, distribution, and listing tests passed.
+- Isolated projects with and without MCP for Unity compiled and passed the native Unity probes using Unity 2022.3.22f1. The installed-dependency project used the current five-language MCP for Unity 10.3.0 fork.
+- The probes verified all five UI languages, placeholders, saved settings, system defaults, fallback values, and English diagnostics. Connection probes covered retries, stopped sessions, endpoint changes, and preservation of upstream reconnection using test transport clients.
+
+These batch checks do not validate interactive dropdown rendering, VCC or UPM Git installation, two live editors, real WebSocket reconnection, or other operating systems. The initial release's real-server lifecycle check remains recorded below.
+
 ## Initial release validation
 
 The latest recorded validation for version 0.1.0 was performed on Windows on 2026-10-04:

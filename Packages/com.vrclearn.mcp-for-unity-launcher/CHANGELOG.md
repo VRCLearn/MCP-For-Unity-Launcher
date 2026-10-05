@@ -1,12 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Add English, Japanese, Korean, Traditional Chinese, and Simplified Chinese UI selection to the Launcher and dependency setup windows. Remember the selection independently and keep diagnostic logs and error messages in English.
 - Connect the Unity project through the actual WebSocket handshake without a blocking TCP pre-check; retry initial failures and resume stopped sessions while preserving upstream socket reconnection.
 - Attempt project connection even when supervisor launch fails, and display project connection and session ID separately from server status.
 - Show VPM and UPM installation instructions when MCP for Unity is missing or incompatible, with no missing-dependency compilation errors.
 - Enable the service integration only when a compatible MCP for Unity package is installed.
+- Document UPM installation for any Unity project in all five languages and exclude Python cache metadata from release packages.
 
 ## 0.1.0
 

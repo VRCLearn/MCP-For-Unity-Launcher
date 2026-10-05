@@ -1,7 +1,7 @@
 {
     "name": "com.vrclearn.mcp-for-unity-launcher",
     "displayName": "MCP for Unity Launcher",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "unity": "2021.3",
     "description": "Automatically starts and supervises a shared local MCP for Unity server across Unity editors. Keeps the server alive while any registered editor is running and recovers from unexpected server exits.",
     "author": {
