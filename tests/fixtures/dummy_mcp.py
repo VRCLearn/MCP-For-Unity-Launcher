@@ -16,6 +16,7 @@ parser.add_argument("--child-file")
 parser.add_argument("--starts-file")
 parser.add_argument("--echo-file")
 parser.add_argument("--value")
+parser.add_argument("--exit-after-child", action="store_true")
 args = parser.parse_args()
 if args.mode == "sleep":
     if args.pid_file:
@@ -31,6 +32,11 @@ if args.echo_file:
     Path(args.echo_file).write_text(args.value, encoding="utf-8")
 if args.child_file:
     subprocess.Popen([sys.executable, __file__, "--mode", "sleep", "--pid-file", args.child_file])
+    if args.exit_after_child:
+        deadline = time.monotonic() + 5
+        while not Path(args.child_file).exists() and time.monotonic() < deadline:
+            time.sleep(.01)
+        sys.exit(3)
 if args.mode == "crash":
     sys.exit(3)
 

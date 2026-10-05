@@ -99,7 +99,7 @@ def run(server_executable: Path, state: Path):
         # Unity's watchdog is separately compiled; this stand-in starts its replacement.
         worker = start_supervisor()
         wait_for(lambda: status()['supervisorPid'] == worker.pid and healthy_pid() != second_pid and healthy_pid())
-        events.append('replacement supervisor recovers B after Windows Job cleanup')
+        events.append('replacement supervisor recovers B after owned-process cleanup')
         editors[1].terminate()
         editors[1].wait(timeout=5)
         worker.wait(timeout=20)

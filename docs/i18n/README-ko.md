@@ -12,7 +12,7 @@
 
 ## 설치
 
-Unity 2021.3 이상과 [uv](https://docs.astral.sh/uv/getting-started/installation/)가 필요합니다. Launcher는 MCP for Unity 10.3.x에 의존합니다. 초기 대상 플랫폼은 Windows입니다.
+Unity 2021.3 이상과 [uv](https://docs.astral.sh/uv/getting-started/installation/)가 필요합니다. Launcher는 MCP for Unity 10.3.x에 의존하며 Windows, macOS, Linux 데스크톱 에디터를 대상으로 합니다.
 
 ### VPM
 
@@ -59,7 +59,7 @@ MCP for Unity가 설치되지 않았거나 버전이 호환되지 않으면 Laun
 
 Launcher는 로컬 HTTP 서비스를 관리합니다. 원격 HTTP 설정은 기존 관리 방식을 유지합니다. 이미 실행 중인 외부 서버는 재사용하지만 해당 프로세스의 관리 권한을 가져오지는 않습니다.
 
-버전 0.1.0은 Windows 프로세스 테스트, Unity 2022.3.22f1 및 MCP for Unity 10.3.0을 사용한 C# 컴파일, 실제 서버의 수명 주기 검증을 통과했습니다. UPM Git 설치, 실제로 실행 중인 두 Unity 에디터에서의 상호작용, 다른 운영체제에서의 동작은 아직 검증되지 않았습니다. 자세한 내용은 [검증 기록](../verification.md)을 확인하세요.
+0.3.0은 macOS의 네이티브 프로세스 식별과 감독 프로세스 종료 시 Linux/macOS 자식 프로세스 정리를 추가합니다. CI는 세 운영체제에서 프로세스 관리, C#/Python 식별 정보의 호환성, 배포 패키지를 검증합니다. Unity 에디터 검증 환경은 Windows와 Unity 2022.3.22f1입니다. 여러 에디터의 대화형 사용과 macOS/Linux에서의 Unity 동작은 아직 검증되지 않았습니다. 자세한 내용은 [검증 기록](../verification.md)을 확인하세요.
 
 ## 다운로드 및 문서
 

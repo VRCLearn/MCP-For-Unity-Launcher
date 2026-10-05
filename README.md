@@ -12,7 +12,7 @@ A Unity Editor addon for [MCP for Unity](https://github.com/VRCLearn/unity-mcp),
 
 ## Installation
 
-Requirements: Unity 2021.3 or later and [uv](https://docs.astral.sh/uv/getting-started/installation/). Launcher depends on MCP for Unity 10.3.x. Windows is the initial target platform.
+Requirements: Unity 2021.3 or later and [uv](https://docs.astral.sh/uv/getting-started/installation/). Launcher depends on MCP for Unity 10.3.x and targets Windows, macOS, and Linux desktop Editors.
 
 ### VPM
 
@@ -59,7 +59,7 @@ Use the **Language** selector in either Launcher window to choose English, Japan
 
 Launcher manages local HTTP services. Remote HTTP configurations stay under their existing management, and existing external servers are reused without taking ownership of their processes.
 
-Version 0.1.0 passed Windows process tests, C# compilation against Unity 2022.3.22f1 and MCP for Unity 10.3.0, and a real-server lifecycle check. UPM Git installation, interactive behavior in two live Unity editors, and other operating systems have not yet been validated. See the [verification record](docs/verification.md).
+Version 0.3.0 adds native macOS process identities and Linux/macOS cleanup after supervisor crashes. CI checks process management, C#/Python identity interoperability, and release packaging on all three systems. Unity Editor checks use Windows and Unity 2022.3.22f1; interactive multi-Editor acceptance and native Unity behavior on macOS/Linux remain unverified. See the [verification record](docs/verification.md).
 
 ## Downloads and documentation
 

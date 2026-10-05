@@ -23,12 +23,14 @@ def prepare():
 - Retries project connection and resumes stopped sessions, with connection status and session ID shown separately.
 - Supports English, Japanese, Korean, Traditional Chinese, and Simplified Chinese UI selection; technical diagnostics stay in English.
 - Provides VPM and UPM installation guidance when MCP for Unity is missing, without dependency-related compilation errors.
+- Adds native macOS process identities and Linux/macOS child-process cleanup after supervisor crashes.
+- Gates publication on process, C#/Python identity, and packaging checks on Windows, macOS, and Linux with Python 3.10 and 3.12.
 
 Install **MCP for Unity Launcher** in each project from the [VPM repository](https://vrclearn.github.io/MCP-For-Unity-Launcher/). MCP for Unity is included as a dependency.
 
 UPM installation is also available for any Unity project. Install MCP for Unity separately, then add the Launcher Git package using the [UPM instructions](https://github.com/VRCLearn/MCP-For-Unity-Launcher#upm-any-unity-project).
 
-Requires Unity 2021.3+, MCP for Unity 10.3.x, and uv. Windows is the initial supported platform. Configure your AI client's local HTTP connection once.
+Requires Unity 2021.3+, MCP for Unity 10.3.x, and uv. Targets Windows, macOS, and Linux desktop Editors. Native Unity validation has been performed on Windows; interactive Unity acceptance on macOS/Linux remains unverified. Configure your AI client's local HTTP connection once.
 
 Open **Window → MCP for Unity Launcher** for service status and settings. See the [README](https://github.com/VRCLearn/MCP-For-Unity-Launcher#installation) for setup and platform validation details.
 '''

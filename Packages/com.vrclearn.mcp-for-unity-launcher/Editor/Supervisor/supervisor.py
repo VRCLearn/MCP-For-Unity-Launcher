@@ -1,18 +1,20 @@
-"""User-scoped MCP supervisor. Python standard library only, Windows first.
+"""User-scoped MCP supervisor for Windows, macOS, and Linux. Standard library only.
 
 Lease files are persistent registrations, not expiring heartbeats. Editor liveness
 is determined by PID plus process creation FILETIME. A validated identity-only
 record with released=true explicitly unregisters a still-running editor; a new
 full registration at the same filename enables it again. Windows compares exactly;
-Linux /proc has clock-tick precision; other POSIX systems conservatively keep
-unverifiable live registrations. Windows owns children using a kill-on-close Job;
-POSIX uses process groups (abrupt supervisor death is not guaranteed to clean up).
+Linux /proc has clock-tick precision; macOS uses libproc's microsecond timestamp.
+Windows owns children using a kill-on-close Job; POSIX uses a pipe-connected
+guardian that cleans up its private process group when the supervisor exits.
 No command arguments or child output are logged, because they may contain secrets.
 """
 
 import argparse
 import ctypes
 import datetime
+import errno
+from functools import lru_cache
 import ipaddress
 import json
 import logging
@@ -23,6 +25,7 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -32,6 +35,42 @@ from dataclasses import dataclass
 
 FILETIME_EPOCH = 116444736000000000
 HEALTH_MESSAGE = "MCP for Unity server is running"
+
+
+class MacProcessInfo(ctypes.Structure):
+    # Darwin proc_bsdinfo, from <sys/proc_info.h> (PROC_PIDTBSDINFO).
+    _fields_ = [(name, ctypes.c_uint32) for name in
+                ("flags", "status", "exit_status", "pid", "parent_pid", "uid", "gid",
+                 "real_uid", "real_gid", "saved_uid", "saved_gid", "reserved")] + [
+                ("command", ctypes.c_char * 16), ("name", ctypes.c_char * 32)] + [
+                (name, ctypes.c_uint32) for name in
+                ("file_count", "group_id", "job_count", "tty_device", "tty_group")] + [
+                ("nice", ctypes.c_int32), ("start_seconds", ctypes.c_uint64),
+                ("start_microseconds", ctypes.c_uint64)]
+
+
+@lru_cache(maxsize=1)
+def mac_process_query():
+    library = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+    query = library.proc_pidinfo
+    query.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
+    query.restype = ctypes.c_int
+    return query
+
+
+def mac_process_start_filetime(pid):
+    info = MacProcessInfo()
+    size = ctypes.sizeof(info)
+    ctypes.set_errno(0)
+    result = mac_process_query()(pid, 3, 0, ctypes.byref(info), size)
+    if result != size:
+        error = ctypes.get_errno()
+        if result == 0 and error == errno.ESRCH:
+            return None
+        raise OSError(error or errno.EIO, "Could not query macOS process identity")
+    if info.status == 5:  # SZOMB: exited but not yet reaped.
+        return None
+    return FILETIME_EPOCH + info.start_seconds * 10000000 + info.start_microseconds * 10
 
 
 def utc_timestamp(offset=0):
@@ -139,6 +178,8 @@ def process_start_filetime(pid):
             return (values[0].dwHighDateTime << 32) | values[0].dwLowDateTime
         finally:
             kernel.CloseHandle(handle)
+    if sys.platform == "darwin":
+        return mac_process_start_filetime(pid)
     if sys.platform.startswith("linux"):
         try:
             stat = Path("/proc/{}/stat".format(pid)).read_text()
@@ -164,7 +205,7 @@ def process_state(pid, start):
         actual = process_start_filetime(pid)
         if actual is None:
             return "dead"
-        tolerance = 0 if os.name == "nt" else 10000000 // os.sysconf("SC_CLK_TCK")
+        tolerance = 10000000 // os.sysconf("SC_CLK_TCK") if sys.platform.startswith("linux") else 0
         return "alive" if abs(actual - int(start)) <= tolerance else "dead"
     except (OSError, ValueError):
         return "unknown"
@@ -340,11 +381,20 @@ class OwnedProcess:
         if os.name == "nt":
             self._start_windows(executable, arguments)
         else:
-            self.process = subprocess.Popen([executable, *arguments], stdin=subprocess.DEVNULL,
-                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                            start_new_session=True)
-            self.pid = self.process.pid
-            self.start = process_start_filetime(self.pid)
+            self.process = subprocess.Popen(
+                [sys.executable, str(Path(__file__).resolve()), "--guard-process", executable, *arguments],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                text=True, start_new_session=True)
+            try:
+                self.pid = int(self.process.stdout.readline())
+                if self.pid <= 0:
+                    raise ValueError("Invalid owned process ID")
+            except (ValueError, OSError):
+                self.process.stdin.close()
+                self.process.wait(timeout=5)
+                raise OSError(errno.EIO, "Could not start the owned MCP process") from None
+            finally:
+                self.process.stdout.close()
 
     def _start_windows(self, executable, arguments):
         info = PROCESS_INFORMATION()
@@ -403,20 +453,54 @@ class OwnedProcess:
     def close(self):
         if self.closed:
             return
-        self.closed = True
         if os.name == "nt":
             kernel.CloseHandle(self.job)
             kernel.WaitForSingleObject(self.process, 5000)
             kernel.CloseHandle(self.process)
         else:
-            # A live owned leader pins the group ID; after its exit, identity must
-            # still be absent/original before signalling the descendants' group.
-            if process_state(self.pid, self.start) != "dead" or process_start_filetime(self.pid) is None:
+            if not self.process.stdin.closed:
+                self.process.stdin.close()
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # Resume a paused guardian before requesting its cleanup handler.
+                self.process.send_signal(signal.SIGCONT)
+                self.process.terminate()
                 try:
-                    os.killpg(self.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            self.process.wait(timeout=5)
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    raise OSError(errno.ETIMEDOUT, "Owned process cleanup timed out") from None
+        self.closed = True
+
+
+def guard_process(command):
+    """A private child group lives only while the supervisor's stdin pipe is open."""
+    stopping = threading.Event()
+
+    def watch_parent():
+        # No input is sent. EOF is also delivered after SIGKILL of the supervisor.
+        sys.stdin.buffer.read()
+        stopping.set()
+
+    for event in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(event, lambda *_: stopping.set())
+    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, start_new_session=True)
+    try:
+        print(process.pid, flush=True)
+        threading.Thread(target=watch_parent, daemon=True).start()
+        while not stopping.wait(.1):
+            # Do not reap the leader until its descendants are cleaned up. Its PID
+            # reserves the group ID, so cleanup cannot signal a reused process group.
+            if process_start_filetime(process.pid) is None:
+                break
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=5)
+    return process.returncode if process.returncode >= 0 else 1
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -594,7 +678,10 @@ class Supervisor:
     def close(self):
         for service in self.services.values():
             if service.process:
-                service.process.close()
+                try:
+                    service.process.close()
+                except OSError:
+                    self.logger.warning("Could not close an owned service; continuing cleanup")
 
     def run(self):
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -619,6 +706,12 @@ class Supervisor:
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "--guard-process" and os.name != "nt":
+        try:
+            return guard_process(argv[1:])
+        except OSError:
+            return 1
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", type=Path, required=True)
     parser.add_argument("--poll", type=float, default=2)

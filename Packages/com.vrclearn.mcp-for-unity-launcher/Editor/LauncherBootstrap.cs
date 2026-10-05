@@ -238,7 +238,7 @@ namespace MCPForUnityLauncher.Editor
             using (var process = Process.GetCurrentProcess())
             {
                 _processId = process.Id;
-                _processStart = process.StartTime.ToUniversalTime().ToFileTimeUtc().ToString(CultureInfo.InvariantCulture);
+                _processStart = ProcessIdentity.StartFileTimeUtc(process).ToString(CultureInfo.InvariantCulture);
             }
             _leasePath = Path.Combine(StateDirectory, "editors", _processId + "-" + _processStart + ".json");
         }

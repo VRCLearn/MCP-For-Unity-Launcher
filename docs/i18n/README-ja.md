@@ -12,7 +12,7 @@
 
 ## インストール
 
-Unity 2021.3 以降と [uv](https://docs.astral.sh/uv/getting-started/installation/) が必要です。Launcher は MCP for Unity 10.3.x に依存します。初期の対象プラットフォームは Windows です。
+Unity 2021.3 以降と [uv](https://docs.astral.sh/uv/getting-started/installation/) が必要です。Launcher は MCP for Unity 10.3.x に依存し、Windows、macOS、Linux のデスクトップ Editor を対象としています。
 
 ### VPM
 
@@ -59,7 +59,7 @@ MCP for Unity が未インストールの場合やバージョンに互換性が
 
 Launcher はローカル HTTP サービスを管理します。リモート HTTP の設定は従来の管理方式を維持します。既存の外部サーバーは再利用しますが、そのプロセスの管理権限は取得しません。
 
-バージョン 0.1.0 は、Windows でのプロセステスト、Unity 2022.3.22f1 と MCP for Unity 10.3.0 を使用した C# コンパイル、実際のサーバーのライフサイクル検証に合格しています。UPM の Git インストール、実際に動作する 2 つの Unity エディターでの操作、他の OS での動作は未検証です。詳細は[検証記録](../verification.md)を参照してください。
+0.3.0 では macOS のネイティブなプロセス識別と、監視プロセス終了時の Linux/macOS の子プロセス整理を追加しました。CI は 3 つの OS でプロセス管理、C#/Python 間の識別情報、配布パッケージを検証します。Unity Editor の検証環境は Windows と Unity 2022.3.22f1 です。複数 Editor の対話操作と macOS/Linux 上の Unity の動作は未検証です。詳細は[検証記録](../verification.md)を参照してください。
 
 ## ダウンロードとドキュメント
 

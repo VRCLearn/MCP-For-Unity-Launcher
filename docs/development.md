@@ -37,7 +37,7 @@ vpm add package "C:\path\to\dist\UserPackages\com.vrclearn.mcp-for-unity-launche
 
 ## Releases
 
-Stable tags must exactly match the version in `Packages/com.vrclearn.mcp-for-unity-launcher/package.json`, such as `0.1.0`. Publishing a new tag runs Windows tests on Python 3.10 and 3.12, builds from that tagged commit, creates a Release, and refreshes the default-branch VPM site. If the Release already exists, the workflow leaves its published assets unchanged and refreshes the listing.
+Stable tags must exactly match the version in `Packages/com.vrclearn.mcp-for-unity-launcher/package.json`, such as `0.3.0`. Publishing a new tag runs Windows, macOS, and Linux tests on Python 3.10 and 3.12, including the production C# identity helper's native interoperability check with .NET 8. All six jobs must pass before packaging and publication. The workflow builds from that tagged commit, creates a Release, and refreshes the default-branch VPM site. If the Release already exists, the workflow leaves its published assets unchanged and refreshes the listing.
 
 Hosted builds take a real HTTPS download URL. Source metadata additionally requires the repository name and full source commit SHA:
 

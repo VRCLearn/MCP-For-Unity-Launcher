@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Add native macOS process identity checks using libproc, with matching microsecond timestamps in the Unity integration and Python supervisor.
+- Clean up owned Linux and macOS server process groups when the supervisor exits or is forcibly terminated, using a pipe-connected guardian.
+- Preserve descendants until group cleanup completes when the server leader exits, and resume a paused guardian when stopping an owned service.
+- Validate native process management, C#/Python identity interoperability, and release packaging on Windows, macOS, and Linux with Python 3.10 and 3.12.
+- Update all five installation guides with platform scope and validation limits.
+
 ## 0.2.0
 
 - Add English, Japanese, Korean, Traditional Chinese, and Simplified Chinese UI selection to the Launcher and dependency setup windows. Remember the selection independently and keep diagnostic logs and error messages in English.

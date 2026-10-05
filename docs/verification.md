@@ -1,5 +1,16 @@
 # Verification
 
+## Cross-platform process checks — 2026-10-05 (0.3.0)
+
+- Windows and Ubuntu 24.04 under WSL each completed the 70-test suite. The standalone C# interop probe was not built locally and was skipped; Windows also skipped the POSIX-only paused-guardian check.
+- Unity 2022.3.22f1 compiled the final package in isolated projects both with MCP for Unity 10.3.0 and without it. The menu, connection regressions, and five-language checks passed without C# compiler warnings or errors.
+- Native process tests cover shared ownership, process identity and PID reuse, literal arguments containing spaces and quotes, preserving external services, cleanup after forced supervisor termination, cleanup when the server leader exits before its descendants, and failed executable startup. Ubuntu also exercised resuming a paused guardian for cleanup.
+- macOS process identities use the documented Darwin `proc_pidinfo(PROC_PIDTBSDINFO)` ABI. The Unity helper and Python reader share its microsecond birth timestamp. Mock checks cover zombie/dead processes, denied queries, partial native results, buffer layout, and timestamp conversion.
+- The validation and release gate now contain six native-runner jobs: Windows, macOS, and Ubuntu with Python 3.10 and 3.12. Each builds the unchanged production C# identity helper with a minimal Unity platform stub and checks its live registration against Python's native process reader. Actual macOS runner results are pending the first authorized push of this change.
+- POSIX child ownership uses a guardian whose stdin is held only by the supervisor. Closing the pipe or abruptly terminating the supervisor triggers cleanup of the guardian's private server process group. The server leader remains unreaped until group cleanup, reserving its identity during cleanup.
+
+These checks do not constitute native macOS/Linux Unity Editor acceptance. Interactive multi-Editor startup, bridge reconnection, and installation through VCC/UPM still need manual acceptance on those systems. Windows Unity checks use the isolated 2022.3.22f1 projects described below.
+
 ## UI language checks — 2026-10-05
 
 Unity 2022.3.22f1 compiled isolated projects both without MCP for Unity and with the actual 10.3.0 package. The final native checks passed without C# warnings or errors:

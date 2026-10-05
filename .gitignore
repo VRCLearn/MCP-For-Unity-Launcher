@@ -6,6 +6,8 @@ dist/
 .test-state/
 .compile/
 .publish/
+tests/identity-probe/bin/
+tests/identity-probe/obj/
 TestProjects/**/Library/
 TestProjects/**/Logs/
 TestProjects/**/Temp/

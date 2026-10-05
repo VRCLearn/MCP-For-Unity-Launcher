@@ -1,4 +1,6 @@
 import importlib.util
+import ctypes
+import errno
 import json
 import os
 from pathlib import Path
@@ -342,6 +344,14 @@ class SupervisorTests(unittest.TestCase):
         self.assertNotIn("secret credential", raw)
         self.assertTrue(data["services"][0]["owned"])
 
+    def test_one_cleanup_failure_does_not_block_other_owned_services(self):
+        self.write(111)
+        self.write(222, port=48124)
+        self.tick()
+        with patch.object(self.spawned[0], "close", side_effect=OSError("Unresponsive guardian")):
+            self.supervisor.close()
+        self.assertTrue(self.spawned[1].closed)
+
 
 class ProcessTests(unittest.TestCase):
     def setUp(self):
@@ -439,15 +449,10 @@ class ProcessTests(unittest.TestCase):
         status = json.loads((self.root / "status.json").read_text())
         winner = next(p for p in runners if p.poll() is None)
         self.assertEqual(status["supervisorPid"], winner.pid)
-        # Crash cleanup is guaranteed by the Job on Windows.
         winner.kill()
         winner.wait(timeout=5)
-        if os.name == "nt":
-            wait_for(lambda: not s.port_busy(url))
-        else:
-            os.killpg(int(starts.read_text().splitlines()[0]), 9)
+        wait_for(lambda: not s.port_busy(url))
 
-    @unittest.skipUnless(os.name == "nt", "Windows kill-on-close Job semantics")
     def test_supervisor_crash_cleans_owned_descendant_tree(self):
         child_file = self.root / "descendant.txt"
         runner_file = self.root / "owner.py"
@@ -464,6 +469,62 @@ class ProcessTests(unittest.TestCase):
         runner.kill()
         runner.wait(timeout=5)
         wait_for(lambda: s.process_start_filetime(descendant) is None)
+
+    def test_exited_server_leader_does_not_leave_descendants(self):
+        child_file = self.root / "surviving child.txt"
+        owned = s.OwnedProcess(sys.executable, [str(FIXTURE), "--port", str(free_port()),
+            "--child-file", str(child_file), "--exit-after-child"])
+        self.children.append(owned)
+        wait_for(child_file.exists)
+        child_pid = int(child_file.read_text())
+        wait_for(lambda: owned.poll() is not None)
+        owned.close()
+        wait_for(lambda: s.process_start_filetime(child_pid) is None)
+
+    def test_invalid_executable_does_not_leave_an_owned_process(self):
+        with self.assertRaises(OSError):
+            s.OwnedProcess(str(self.root / "missing executable"), [])
+
+    @unittest.skipIf(os.name == "nt", "POSIX guardian signals")
+    def test_paused_guardian_is_resumed_for_owned_cleanup(self):
+        owned = s.OwnedProcess(sys.executable, [str(FIXTURE), "--port", str(free_port())])
+        self.children.append(owned)
+        os.kill(owned.process.pid, s.signal.SIGSTOP)
+        owned.close()
+        self.assertTrue(owned.closed)
+        wait_for(lambda: s.process_start_filetime(owned.pid) is None)
+
+
+class MacIdentityTests(unittest.TestCase):
+    def query(self, *, status=2, result=136, error=0):
+        def native(pid, flavor, argument, buffer, size):
+            self.assertEqual((pid, flavor, argument, size), (123, 3, 0, 136))
+            info = ctypes.cast(buffer, ctypes.POINTER(s.MacProcessInfo)).contents
+            info.status = status
+            info.start_seconds = 1700000000
+            info.start_microseconds = 123456
+            ctypes.set_errno(error)
+            return result
+        return patch.object(s, "mac_process_query", return_value=native)
+
+    def test_microsecond_birth_time_and_native_layout(self):
+        self.assertEqual(ctypes.sizeof(s.MacProcessInfo), 136)
+        self.assertEqual(s.MacProcessInfo.start_seconds.offset, 120)
+        with self.query():
+            self.assertEqual(s.mac_process_start_filetime(123),
+                s.FILETIME_EPOCH + 1700000000 * 10000000 + 1234560)
+
+    def test_exited_and_missing_processes_are_dead(self):
+        with self.query(status=5):
+            self.assertIsNone(s.mac_process_start_filetime(123))
+        with self.query(result=0, error=errno.ESRCH):
+            self.assertIsNone(s.mac_process_start_filetime(123))
+
+    def test_denied_and_partial_native_queries_are_not_dead(self):
+        for result, error in ((0, errno.EPERM), (12, 0)):
+            with self.query(result=result, error=error):
+                with self.assertRaises(OSError):
+                    s.mac_process_start_filetime(123)
 
 
 if __name__ == "__main__":

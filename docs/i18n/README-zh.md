@@ -12,7 +12,7 @@
 
 ## 安装
 
-需要 Unity 2021.3 或更高版本以及 [uv](https://docs.astral.sh/uv/getting-started/installation/)。Launcher 依赖 MCP for Unity 10.3.x；首版面向 Windows。
+需要 Unity 2021.3 或更高版本以及 [uv](https://docs.astral.sh/uv/getting-started/installation/)。Launcher 依赖 MCP for Unity 10.3.x，目标平台为 Windows、macOS 和 Linux 桌面版 Editor。
 
 ### VPM
 
@@ -59,7 +59,7 @@
 
 Launcher 管理本地 HTTP 服务。远程 HTTP 服务沿用原来的管理方式；已有的外部服务可以被使用，但 Launcher 不会接管或结束其进程。
 
-0.1.0 已通过 Windows 进程测试、基于 Unity 2022.3.22f1 和 MCP for Unity 10.3.0 的 C# 编译，以及真实 MCP 服务的生命周期检查。UPM Git 安装、两个真实 Unity 编辑器中的交互行为及其他操作系统尚未验证。详情见 [验证记录](../verification.md)。
+0.3.0 新增 macOS 原生进程身份检查，以及监督进程结束时的 Linux/macOS 子进程清理。CI 在三个系统上检查进程管理、C#/Python 身份信息兼容性及发布封装。Unity Editor 的验证环境是 Windows 和 Unity 2022.3.22f1；多个 Editor 的交互操作及 macOS/Linux 上的 Unity 行为尚未验证。详情见 [验证记录](../verification.md)。
 
 ## 下载与文档
 
