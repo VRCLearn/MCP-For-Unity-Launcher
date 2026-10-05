@@ -111,6 +111,8 @@ jobs:
           set -euo pipefail
           python tools/prepare_vpm_source.py .github/vpm/source.json official-template/source.json
           python tools/patch_vpm_template.py official-template/Website
+          cp .github/vpm/vrclearn-banner.png official-template/Website/vrclearn-banner.png
+          cat .github/vpm/banner.css >> official-template/Website/styles.css
           dotnet run --project ci/PackageBuilder/PackageBuilder.csproj --framework net8.0 -- BuildRepoListing \
             --root ci --package-listing-source-folder "$GITHUB_WORKSPACE/official-template" \
             --list-publish-directory "$GITHUB_WORKSPACE/official-template/Website" \

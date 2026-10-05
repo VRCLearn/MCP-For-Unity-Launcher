@@ -7,7 +7,7 @@
         "url": "https://github.com/VRCLearn"
     },
     "description": "MCP for Unity and its Launcher, with automatic shared-server startup and recovery across Unity editors.",
-    "bannerUrl": "banner.png",
+    "bannerUrl": "vrclearn-banner.png",
     "infoLink": {
         "text": "Source and documentation",
         "url": "https://github.com/VRCLearn/MCP-For-Unity-Launcher"
