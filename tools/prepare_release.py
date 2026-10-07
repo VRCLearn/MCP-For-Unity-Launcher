@@ -17,14 +17,16 @@ def prepare():
     result = build(output, url, repository=repository, revision=revision)
     notes = f'''MCP for Unity Launcher {version} starts and manages MCP for Unity's local HTTP service automatically.
 
-This patch prevents healthy servers from restarting when MCP for Unity's periodic uv cache probe adds or removes `--offline`. Editors with different cache probe results can share the same server. Actual server configuration changes and crash recovery continue to work.
+This release repairs projects that remain disconnected after the shared server has recovered. It gives upstream reconnection 60 seconds, then rebuilds only the affected project's client. Connection attempts have a 45-second deadline and use fresh clients; late callbacks cannot overwrite their replacements.
 
-After updating, close all Unity Editors using Launcher, wait about 15 seconds, then reopen your projects so the shared supervisor loads the updated code.
+Managed local connections must confirm their project session, enabled tools, and a lightweight Editor request round trip. Periodic verification updates both connection windows. Launcher shows registration progress, retry delays, and the last verification in all five languages.
+
+After updating, reopen each project so the managed transport is installed before its first connection. This release updates Launcher only; MCP for Unity 10.3.x remains supported.
 
 - Starts the service and connects Unity when a project opens.
 - Keeps a shared service running when one of several participating editors closes.
 - Recovers the service and supervisor after unexpected failures.
-- Retries project connection and resumes stopped sessions, with connection status and session ID shown separately.
+- Recovers stalled project connections without restarting the server or other projects.
 - Supports English, Japanese, Korean, Traditional Chinese, and Simplified Chinese UI selection; technical diagnostics stay in English.
 - Provides VPM and UPM installation guidance when MCP for Unity is missing, without dependency-related compilation errors.
 - Uses native macOS process identities and cleans up Linux/macOS child processes after supervisor crashes.

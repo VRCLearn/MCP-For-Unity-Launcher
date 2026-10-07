@@ -11,3 +11,5 @@ tests/identity-probe/obj/
 TestProjects/**/Library/
 TestProjects/**/Logs/
 TestProjects/**/Temp/
+tests/transport-probe/bin/
+tests/transport-probe/obj/

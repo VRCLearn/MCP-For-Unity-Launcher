@@ -58,6 +58,8 @@ def main():
         text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
         if result.returncode or "LAUNCHER_VERIFICATION: passed" not in text:
             raise RuntimeError(f"{scenario} failed (exit {result.returncode}); inspect {log}")
+        if expected == "1" and "LAUNCHER_CONNECTION_VERIFICATION: passed" not in text:
+            raise RuntimeError(f"{scenario} connection recovery probes did not complete; inspect {log}")
         print(f"{scenario}: passed", flush=True)
 
 

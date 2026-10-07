@@ -17,6 +17,7 @@ Only the Unity package directory is copied into release archives and local user 
 Run from the repository root:
 
 ```powershell
+dotnet run --project tests/transport-probe/TransportProbe.csproj --configuration Release
 python -m unittest discover -s tests -v
 python tools/build_package.py --output dist
 ```
@@ -27,7 +28,17 @@ To verify optional dependency compilation and the Launcher menu using a licensed
 python tools/verify_unity.py --unity-executable "C:\Program Files\Unity\Hub\Editor\2022.3.22f1\Editor\Unity.exe" --mcp-package "C:\path\to\unity-mcp\MCPForUnity" --output .compile\dependency-check
 ```
 
-The output directory must be new. This creates isolated projects with and without MCP for Unity, checks compilation, assembly activation, the menu window, and missing-dependency prompt deduplication, and preserves logs. Both scenarios validate the five-language UI, all translation entries and format placeholders, system defaults, saved and invalid choices, immediate setup-window title changes, and generated English diagnostics. The present-dependency scenario also uses upstream bridge and transport services with test transport clients to check automatic project connection, retry delays, stopped-session recovery, endpoint changes, and preservation of upstream reconnection. It restores changed EditorPrefs. It modifies no existing Unity project. The supplied MCP package's own dependencies use Unity's normal package resolution. These batch checks do not start Launcher services, open a real WebSocket, or validate the installation buttons and dropdown visually.
+The output directory must be new. This creates isolated projects with and without MCP for Unity, checks compilation, assembly activation, the menu window, and missing-dependency prompt deduplication, and preserves logs. Both scenarios validate the five-language UI, all translation entries and format placeholders, system defaults, saved and invalid choices, immediate setup-window title changes, and generated English diagnostics. The present-dependency scenario also uses upstream bridge and transport services with test transport clients to check automatic project connection, retry delays, stopped-session recovery, endpoint changes, and preservation of upstream reconnection, bounded hung operations, late completion isolation, registration failures, session changes, and configuration transitions. It restores changed EditorPrefs. It modifies no existing Unity project. The supplied MCP package's own dependencies use Unity's normal package resolution. These batch checks do not start Launcher services, open a real WebSocket, or validate the installation buttons and dropdown visually.
+
+To exercise real two-Editor recovery on an independent server port:
+
+```powershell
+python tools/verify_recovery.py --unity-executable "C:\Program Files\Unity\Hub\Editor\2022.3.22f1\Editor\Unity.exe" --mcp-package "C:\path\to\MCPForUnity" --server-executable "C:\path\to\mcp-for-unity.exe" --output .compile\two-editor-recovery
+```
+
+Use the published MCP for Unity 10.3.0 client and a prepared 10.3.0 server environment. The new output directory receives two generated batch projects, isolated server logs, and `result.json`. It retires A's client while verifying B's session remains intact, then restarts only its own test server and confirms both clients. Generated MCP client copies get a unique EditorPrefs namespace so their temporary URL cannot redirect existing user projects. Production Launcher source and the server protocol remain unchanged. The script never publishes Launcher leases or starts the shared supervisor, and cleans up only its own process trees. Native Unity licensing and package dependency resolution are required.
+
+The .NET lifecycle probe compiles the actual adapter with minimal upstream substitutes. It runs on all CI platforms without Unity licensing; it verifies lifecycle and generation behavior, while the licensed batch checks verify real Unity APIs and WebSockets. Neither substitutes for interactive acceptance on every supported Editor platform.
 
 The build creates a VPM ZIP, a UnityPackage, a staged `package.json`, SHA-256 checksums, and `dist/UserPackages/com.vrclearn.mcp-for-unity-launcher`. Add that folder as a local user package in VCC, or install it with the [VPM CLI](https://vcc.docs.vrchat.com/vpm/cli/):
 

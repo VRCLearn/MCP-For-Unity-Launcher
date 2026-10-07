@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
@@ -9,7 +10,7 @@ public static class LauncherCompilationProbe
 {
     private static bool _nonEnglishDiagnostics;
 
-    public static void Run()
+    public static async void Run()
     {
         _nonEnglishDiagnostics = false;
         Application.logMessageReceived += CaptureDiagnostics;
@@ -54,7 +55,7 @@ public static class LauncherCompilationProbe
             }
 
             if (integration)
-                Type.GetType("LauncherConnectionProbe, Assembly-CSharp-Editor", true).GetMethod("Run").Invoke(null, null);
+                await (Task)Type.GetType("LauncherConnectionProbe, Assembly-CSharp-Editor", true).GetMethod("Run").Invoke(null, null);
             LauncherLocalizationProbe.Run();
             Require(!_nonEnglishDiagnostics, "Launcher emitted a non-English diagnostic");
             Debug.Log("LAUNCHER_VERIFICATION: passed");

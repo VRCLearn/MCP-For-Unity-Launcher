@@ -40,7 +40,11 @@ namespace MCPForUnityLauncher.Editor
 
             var client = MCPServiceLocator.TransportManager.GetClient(TransportMode.Http);
             EditorGUILayout.LabelField(Text("Project connection"), client != null && client.IsConnected ? Text("Connected") :
-                LauncherBootstrap.CanManageLocalServer ? Text("Disconnected / waiting for automatic connection") : Text("Disconnected"));
+                LauncherBootstrap.CanManageLocalServer ? Text(LauncherBootstrap.ConnectionPhase) : Text("Disconnected"));
+            if (LauncherBootstrap.CanManageLocalServer && LauncherBootstrap.RetrySeconds > 0)
+                EditorGUILayout.LabelField(Format("Retry in {0} seconds", LauncherBootstrap.RetrySeconds));
+            if (!string.IsNullOrEmpty(LauncherBootstrap.LastVerifiedUtc))
+                EditorGUILayout.LabelField(Text("Last project verification"), LauncherBootstrap.LastVerifiedUtc);
             if (!string.IsNullOrEmpty(client?.State?.SessionId) && client.State.SessionId != "pending")
                 EditorGUILayout.LabelField(Text("Session ID"), client.State.SessionId);
 

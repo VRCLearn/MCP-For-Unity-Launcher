@@ -12,6 +12,7 @@ using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
 using MCPForUnity.Editor.Services.Server;
 using MCPForUnity.Editor.Services.Transport;
+using MCPForUnity.Editor.Services.Transport.Transports;
 using UnityEditor;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
@@ -85,10 +86,22 @@ namespace MCPForUnityLauncher.Editor
         private static bool _connectedOnce;
         private static bool _needsNewEndpoint;
         private static string _lastLocalUrl;
+        private static TransportManager _configuredManager;
+        private static double _disconnectedSince = -1;
+        private static double _nextVerify;
+        private static bool _verificationInFlight;
+        private static int _connectionGeneration;
+        private static string _lastVerifiedUtc;
         private static bool _quitting;
         private static Process _launchProcess;
 
         internal static string LastError => _lastError ?? _lastConnectionError;
+        internal static string LastVerifiedUtc => _lastVerifiedUtc;
+        internal static int RetrySeconds => (int)Math.Max(0, Math.Ceiling(_nextConnect - EditorApplication.timeSinceStartup));
+        internal static string ConnectionPhase => _connectInFlight ? "Connecting and registering" :
+            _verificationInFlight ? "Verifying project connection" :
+            _disconnectedSince != -1 ? "Waiting for upstream reconnection" :
+            RetrySeconds > 0 ? "Waiting for automatic recovery" : "Disconnected / waiting for automatic connection";
         internal static string LogDirectory => StateDirectory;
         internal static string LaunchLogPath => Path.Combine(StateDirectory, "supervisor.log");
         internal static bool HasSupervisorLaunch => _launchProcess != null;
@@ -111,17 +124,20 @@ namespace MCPForUnityLauncher.Editor
                 if (value)
                 {
                     InstallWrapper();
+                    InstallTransport();
                     _connectedOnce = false;
                     _nextTick = 0;
                     _nextConnect = 0;
                 }
                 else
                 {
+                    _connectionGeneration++;
                     if (_connectInFlight)
-                        MCPServiceLocator.TransportManager.ForceStop(TransportMode.Http);
+                        CancelPendingConnection();
                     RemoveLease();
                     RestoreWrapper();
                     _connectedOnce = false;
+                    _disconnectedSince = -1;
                 }
             }
         }
@@ -151,7 +167,11 @@ namespace MCPForUnityLauncher.Editor
         static LauncherBootstrap()
         {
             // Protect upstream startup and quitting before deferred editor work runs.
-            if (!Application.isBatchMode && Enabled) InstallWrapper();
+            if (!Application.isBatchMode && Enabled)
+            {
+                InstallWrapper();
+                InstallTransport();
+            }
             if (Application.isBatchMode) return;
             EditorApplication.update += Update;
             EditorApplication.quitting += OnQuitting;
@@ -173,6 +193,14 @@ namespace MCPForUnityLauncher.Editor
             _wrapper = null;
         }
 
+        private static void InstallTransport()
+        {
+            var manager = MCPServiceLocator.TransportManager;
+            if (ReferenceEquals(manager, _configuredManager) || manager.GetClient(TransportMode.Http) != null) return;
+            manager.Configure(() => new ManagedHttpTransportClient(), () => new StdioTransportClient());
+            _configuredManager = manager;
+        }
+
         private static void Update()
         {
             if (_quitting || EditorApplication.timeSinceStartup < _nextTick) return;
@@ -186,10 +214,17 @@ namespace MCPForUnityLauncher.Editor
             try
             {
                 InstallWrapper();
+                InstallTransport();
                 if (IsRemote)
                 {
+                    if (_connectInFlight)
+                    {
+                        _connectionGeneration++;
+                        CancelPendingConnection();
+                    }
                     RemoveLease();
                     _connectedOnce = false;
+                    _disconnectedSince = -1;
                     _needsNewEndpoint = true;
                     return;
                 }
@@ -198,7 +233,10 @@ namespace MCPForUnityLauncher.Editor
                 EditorConfigurationCache.Instance.SetUseHttpTransport(true);
                 if (_lastLocalUrl != null && _lastLocalUrl != BaseUrl)
                 {
+                    _connectionGeneration++;
+                    if (_connectInFlight) CancelPendingConnection();
                     _connectedOnce = false;
+                    _disconnectedSince = -1;
                     _needsNewEndpoint = true;
                     _nextConnect = 0;
                 }
@@ -334,36 +372,85 @@ namespace MCPForUnityLauncher.Editor
             if (_connectInFlight || Lifetime.IsCancellationRequested || EditorApplication.isCompiling || EditorApplication.isUpdating)
                 return;
             var client = MCPServiceLocator.TransportManager.GetClient(TransportMode.Http);
+            if (client is ManagedHttpTransportClient &&
+                !_verificationInFlight && EditorApplication.timeSinceStartup >= _nextVerify && !_needsNewEndpoint)
+                _ = VerifyConnectionAsync();
             if (!_needsNewEndpoint && client != null && client.IsConnected)
             {
                 _connectedOnce = true;
                 _connectFailures = 0;
                 _lastConnectionError = null;
+                _disconnectedSince = -1;
+                if (!_verificationInFlight && EditorApplication.timeSinceStartup >= _nextVerify)
+                    _ = VerifyConnectionAsync();
                 return;
             }
             // Explicit Stop/ForceStop clears the transport error and cancels upstream
             // reconnection. Resume automatic management in that case.
             if (client == null || (!client.IsConnected && string.IsNullOrEmpty(client.State?.Error)))
+            {
                 _connectedOnce = false;
-            // A socket failure retains an error while upstream owns its reconnect loop.
-            if (_connectedOnce || EditorApplication.timeSinceStartup < _nextConnect) return;
+                _disconnectedSince = -1;
+            }
+            if (_connectedOnce)
+            {
+                if (_disconnectedSince == -1) _disconnectedSince = EditorApplication.timeSinceStartup;
+                // Give upstream a full reconnect cycle before rebuilding only this
+                // project's client. A dead reconnect task must not block it forever.
+                if (EditorApplication.timeSinceStartup - _disconnectedSince < 60) return;
+                MCPServiceLocator.TransportManager.ForceStop(TransportMode.Http);
+                _connectedOnce = false;
+                _disconnectedSince = -1;
+                SetConnectionError("Upstream reconnection did not recover this project within 60 seconds. Rebuilding its connection.");
+            }
+            if (EditorApplication.timeSinceStartup < _nextConnect) return;
             // Use the real WebSocket handshake: a short synchronous TCP probe must
             // not silently prevent project registration with a reachable server.
             _ = ConnectAsync(Lifetime.Token);
         }
 
+        private static async Task VerifyConnectionAsync()
+        {
+            _verificationInFlight = true;
+            int generation = _connectionGeneration;
+            string url = BaseUrl;
+            try
+            {
+                bool verified = await MCPServiceLocator.TransportManager.VerifyAsync(TransportMode.Http);
+                if (generation != _connectionGeneration || !CanManageLocalServer || url != BaseUrl) return;
+                if (verified) _lastVerifiedUtc = DateTimeOffset.UtcNow.ToString("u", CultureInfo.InvariantCulture);
+                else SetConnectionError("Project verification failed. Waiting for reconnection before rebuilding this project's client.");
+            }
+            catch (Exception exception)
+            {
+                if (generation == _connectionGeneration && CanManageLocalServer) SetConnectionError(exception.Message);
+            }
+            finally
+            {
+                _nextVerify = EditorApplication.timeSinceStartup + 10;
+                _verificationInFlight = false;
+            }
+        }
+
+        private static void CancelPendingConnection()
+        {
+            var client = MCPServiceLocator.TransportManager.GetClient(TransportMode.Http);
+            if (client is ManagedHttpTransportClient managed) managed.CancelPendingLocalStart();
+            else if (!IsRemote) MCPServiceLocator.TransportManager.ForceStop(TransportMode.Http);
+        }
+
         private static async Task ConnectAsync(CancellationToken token)
         {
             _connectInFlight = true;
+            int generation = _connectionGeneration;
             try
             {
                 string requestedUrl = BaseUrl;
                 if (token.IsCancellationRequested || !Enabled || IsRemote) return;
                 bool connected = await MCPServiceLocator.Bridge.StartAsync();
-                if (token.IsCancellationRequested) return;
+                if (token.IsCancellationRequested || generation != _connectionGeneration) return;
                 if (!Enabled || IsRemote)
                 {
-                    await MCPServiceLocator.TransportManager.StopAsync(TransportMode.Http);
                     return;
                 }
                 if (BaseUrl != requestedUrl)
@@ -378,6 +465,8 @@ namespace MCPForUnityLauncher.Editor
                 {
                     _needsNewEndpoint = false;
                     _connectFailures = 0;
+                    _disconnectedSince = -1;
+                    _nextVerify = 0;
                     _lastConnectionError = null;
                     Debug.Log(LogPrefix + "The Unity project automatically connected to " + requestedUrl + ".");
                 }
@@ -390,7 +479,7 @@ namespace MCPForUnityLauncher.Editor
             }
             catch (Exception exception)
             {
-                if (!token.IsCancellationRequested)
+                if (!token.IsCancellationRequested && generation == _connectionGeneration)
                 {
                     _connectFailures++;
                     _nextConnect = EditorApplication.timeSinceStartup + Math.Min(30, 5 * _connectFailures);

@@ -31,6 +31,8 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Build the production process identity helper for native interop checks
         run: dotnet build tests/identity-probe/IdentityProbe.csproj --configuration Release
+      - name: Verify the linked production transport lifecycle without Unity
+        run: dotnet run --project tests/transport-probe/TransportProbe.csproj --configuration Release
       - name: Run supervisor and distribution tests
         env:
           LAUNCHER_IDENTITY_PROBE: tests/identity-probe/bin/Release/net8.0/IdentityProbe.dll

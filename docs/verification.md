@@ -1,5 +1,13 @@
 # Verification
 
+## Project recovery — 2026-10-08 (0.4.0)
+
+- Windows Unity 2022.3.22f1 passed isolated missing-dependency and present-dependency compilation, menu, five-language, and asynchronous connection checks. The present scenario used the published MCP for Unity 10.3.0 ZIP. There were no C# compiler warnings or errors. Regression coverage includes initial backoff, explicit Stop, the 60-second upstream grace period and its expiry, hanging Start/Stop/Verify operations, retired-client late success, stale registration callbacks, session changes, disabled management, and configuration transitions.
+- Two real batch Editors connected to a real MCP 10.3.0 server on an isolated loopback port. A acquired a new confirmed session when only its client was retired; B kept its original session. After terminating and restarting only the test server, both Editors acquired new sessions and passed the production registration, enabled-tool, and Editor request round-trip checks. The script preserves `result.json` plus Editor and server logs.
+- The generated network-test MCP package copies use a unique EditorPrefs namespace, preventing their temporary endpoint from affecting open user projects. The Launcher transport code and server protocol are unchanged. No supervisor or lease is created by the network probe. This exercises batch WebSocket recovery on Windows, rather than interactive menus, domain reload, Play mode, or native macOS/Linux Editors.
+- The .NET 8 lifecycle probe directly compiles the production adapter and passed ten scenarios using a single-threaded synchronization context. Its upstream substitutes verify lifecycle logic, cancellation, and generation isolation; they do not replace the native Unity/network checks. The same probe is required in all six CI jobs.
+- The 78-test Python suite passed locally with the production C# identity probe enabled; only the POSIX-only paused-guardian case was skipped on Windows. VPM ZIP and UnityPackage builds passed structural verification.
+
 ## Cache-policy restart regression — 2026-10-06 (0.3.1)
 
 - Windows and Ubuntu 24.04 under WSL each passed the 78-test suite. The unchanged standalone C# identity probe was skipped locally; Windows also skipped the POSIX-only paused-guardian check. The VPM ZIP and UnityPackage build and structural validation passed.

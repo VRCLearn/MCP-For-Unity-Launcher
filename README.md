@@ -2,6 +2,8 @@
 
 **English** | [日本語](docs/i18n/README-ja.md) | [한국어](docs/i18n/README-ko.md) | [繁體中文](docs/i18n/README-zh-TW.md) | [简体中文](docs/i18n/README-zh.md)
 
+Version 0.4.0 also recovers projects whose own connection remains disconnected after the server has recovered. Launcher allows 60 seconds for upstream reconnection, then rebuilds only that project’s client. Connection attempts have a 45-second deadline; readiness requires its session, enabled tools, and a lightweight Editor round trip. The window shows recovery progress and the last verification. Reopen each project after updating so the managed transport is installed before its first connection. This update only requires a new Launcher package.
+
 A Unity Editor addon for [MCP for Unity](https://github.com/VRCLearn/unity-mcp), installable through VPM or UPM, that starts its local server when you open a Unity project and keeps it running across multiple editors.
 
 - **Automatic startup:** open a project to start the server and connect its Unity bridge.
@@ -58,8 +60,6 @@ Use the **Language** selector in either Launcher window to choose English, Japan
 ## Scope and current validation
 
 Launcher manages local HTTP services. Remote HTTP configurations stay under their existing management, and existing external servers are reused without taking ownership of their processes.
-
-Version 0.3.1 prevents cache-probe changes from restarting healthy servers. After updating, close all Unity Editors using Launcher, wait about 15 seconds, then reopen your projects to load the updated supervisor.
 
 Version 0.3.0 adds native macOS process identities and Linux/macOS cleanup after supervisor crashes. CI checks process management, C#/Python identity interoperability, and release packaging on all three systems. Unity Editor checks use Windows and Unity 2022.3.22f1; interactive multi-Editor acceptance and native Unity behavior on macOS/Linux remain unverified. See the [verification record](docs/verification.md).
 

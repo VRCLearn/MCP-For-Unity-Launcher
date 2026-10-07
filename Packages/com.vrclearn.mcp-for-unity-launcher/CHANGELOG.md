@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Recover a single project after upstream reconnection makes no progress for 60 seconds, without restarting the shared server or other projects.
+- Bound HTTP connection attempts to 45 seconds and verification to 10 seconds; retire stalled clients and isolate late callbacks from replacement connections.
+- Confirm the project session, enabled tool registration, and a lightweight Editor request round trip before reporting a managed local connection as connected. Periodically refresh both Launcher and upstream transport status.
+- Show registration, reconnection, retry delay, and last verification in all five UI languages.
+- Add asynchronous Unity regressions and an isolated two-Editor real-server recovery check.
+- Reopen each updated project to install the managed transport before its first connection. This release changes Launcher only and remains compatible with MCP for Unity 10.3.x.
+
 ## 0.3.1
 
 - Preserve running servers when the upstream uv cache probe adds or removes its leading `--offline` flag. Apply the latest cache policy only when another launch is needed, without resetting health checks or recovery backoff.

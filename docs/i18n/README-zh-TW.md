@@ -2,6 +2,8 @@
 
 [English](../../README.md) | [日本語](README-ja.md) | [한국어](README-ko.md) | **繁體中文** | [简体中文](README-zh.md)
 
+0.4.0 也會處理「伺服器已恢復，但目前專案仍未連線」的情況：先等待 MCP 自行重新連線 60 秒，再只重建該專案的用戶端。連線嘗試最多 45 秒，並確認工作階段、已啟用工具及輕量編輯器請求往返後才顯示已連線。視窗顯示恢復進度和上次驗證時間。更新後請重新開啟每個專案，讓新的連線管理在首次連線前生效；只需更新 Launcher。
+
 這是搭配 [MCP for Unity](https://github.com/VRCLearn/unity-mcp) 使用的 Unity 編輯器擴充套件，可透過 VPM 或 UPM 安裝，讓本機 MCP 伺服器隨 Unity 專案自動啟動，並在多個編輯器之間持續運作。
 
 - **自動啟動**：開啟專案後，自動啟動伺服器並連接 Unity 編輯器橋接功能。
@@ -58,8 +60,6 @@
 ## 使用範圍與驗證情況
 
 Launcher 管理本機 HTTP 服務。遠端 HTTP 設定沿用原本的管理方式；現有的外部伺服器可以繼續使用，但 Launcher 不會接管其程序。
-
-0.3.1 修復快取檢查結果變化時不必要地重啟正常伺服器的問題。更新後請關閉所有使用 Launcher 的 Unity Editor，等待約 15 秒，再重新開啟專案以載入更新後的監督程序。
 
 0.3.0 新增 macOS 原生程序身分檢查，以及監督程序結束時的 Linux/macOS 子程序清理。CI 在三個系統上檢查程序管理、C#/Python 身分資訊相容性與發佈封裝。Unity Editor 的驗證環境是 Windows 與 Unity 2022.3.22f1；多個 Editor 的互動操作及 macOS/Linux 上的 Unity 行為尚未驗證。詳情請見[驗證記錄](../verification.md)。
 
