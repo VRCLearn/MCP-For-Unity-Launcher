@@ -13,6 +13,31 @@ namespace MCPForUnityLauncher.Editor
 {
     internal static class ProjectRegistrationProbe
     {
+        internal static async Task<bool> WaitForServerAsync(CancellationToken token)
+        {
+            string url = LauncherBootstrap.BaseUrl.TrimEnd('/') + "/health";
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                using (var request = CancellationTokenSource.CreateLinkedTokenSource(token))
+                {
+                    request.CancelAfter(TimeSpan.FromSeconds(1));
+                    try
+                    {
+                        var health = JsonUtility.FromJson<Health>(await RequestAsync(url, null, request.Token));
+                        if (health?.status == "healthy" && health.message == "MCP for Unity server is running")
+                            return true;
+                    }
+                    catch (Exception exception) when (exception is WebException || exception is IOException ||
+                        exception is ArgumentException || exception is OperationCanceledException)
+                    {
+                        token.ThrowIfCancellationRequested();
+                    }
+                }
+                await Task.Delay(500, token);
+            }
+        }
+
         internal static async Task<string> VerifyAsync(CancellationToken token)
         {
             // Capture Unity APIs on the calling Editor thread before any I/O.
@@ -95,6 +120,7 @@ namespace MCPForUnityLauncher.Editor
         }
 
 #pragma warning disable CS0649
+        [Serializable] private sealed class Health { public string status; public string message; }
         [Serializable] private sealed class Instances { public bool success; public Instance[] instances; }
         [Serializable] private sealed class Instance { public string hash; public string session_id; }
         [Serializable] private sealed class Tools { public bool success; public string project_id; public Tool[] tools; }

@@ -67,6 +67,8 @@ namespace MCPForUnityLauncher.Editor
     }
     internal static class ProjectRegistrationProbe
     {
+        internal static Task<bool> WaitForServerAsync(CancellationToken token)
+            => throw new NotSupportedException("The CI probe must inject its server readiness wait.");
         internal static Task<string> VerifyAsync(CancellationToken token)
             => throw new NotSupportedException("The CI probe does not perform real Unity registration or network I/O.");
     }

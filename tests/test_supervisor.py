@@ -1,6 +1,7 @@
 import importlib.util
 import ctypes
 import errno
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -238,10 +240,92 @@ class SupervisorTests(unittest.TestCase):
         self.tick(303)
         self.health = False
         self.tick(304)
-        self.tick(313.9)
+        self.tick(363.9)
         self.assertFalse(self.spawned[-1].closed)
-        self.tick(314)
+        self.tick(364)
         self.assertTrue(self.spawned[-1].closed)
+
+    def test_busy_owned_server_recovers_without_replacing_process(self):
+        self.write()
+        self.tick()
+        original = self.spawned[0]
+        self.health = True
+        self.tick(1)
+        self.health = False
+        for now in (2, 12, 22, 31):
+            self.tick(now)
+            self.assertEqual(self.service().state, "unhealthy")
+            self.assertIs(self.service().process, original)
+            self.assertFalse(original.closed)
+        self.health = True
+        self.tick(32)
+        self.assertEqual(self.service().state, "healthy")
+        self.assertIsNone(self.service().unhealthy_since)
+        self.assertIs(self.service().process, original)
+        self.assertEqual(self.service().restart_count, 1)
+        self.assertEqual(len(self.spawned), 1)
+        # A later busy period gets its own full grace, rather than inheriting
+        # the first period's elapsed time.
+        self.health = False
+        self.tick(40)
+        self.tick(70)
+        self.assertIs(self.service().process, original)
+        self.assertFalse(original.closed)
+
+    def test_persistently_unresponsive_owned_server_restarts_after_grace(self):
+        self.write()
+        self.tick()
+        original = self.spawned[0]
+        self.health = True
+        self.tick(1)
+        self.health = False
+        self.tick(2)
+        self.tick(61.9)
+        self.assertFalse(original.closed)
+        self.tick(62)
+        self.assertTrue(original.closed)
+        self.assertIsNone(self.service().process)
+        self.assertEqual(self.service().state, "backoff")
+        self.assertEqual(self.service().error, "MCP health check timed out")
+        self.tick(63.9)
+        self.assertEqual(len(self.spawned), 1)
+        self.tick(64)
+        self.assertEqual(len(self.spawned), 2)
+        self.assertEqual(self.service().restart_count, 2)
+
+    def test_owned_exit_during_busy_grace_is_handled_immediately(self):
+        self.write()
+        self.tick()
+        original = self.spawned[0]
+        self.health = True
+        self.tick(1)
+        self.health = False
+        self.tick(2)
+        original.exit_code = 3
+        with patch.object(self.supervisor, "health") as health:
+            self.tick(3)
+        health.assert_not_called()
+        self.assertTrue(original.closed)
+        self.assertEqual(self.service().state, "backoff")
+        self.assertEqual(self.service().error, "Owned MCP process exited")
+        self.assertEqual(self.service().retry_at, 5)
+
+    def test_busy_external_server_is_never_replaced_after_health_grace(self):
+        self.write()
+        self.health = True
+        self.tick()
+        self.health = False
+        self.busy = True
+        for now in (1, 31, 61, 121):
+            self.tick(now)
+            self.assertEqual(self.service().state, "blocked")
+            self.assertIsNone(self.service().process)
+            self.assertEqual(self.spawned, [])
+        self.health = True
+        self.tick(122)
+        self.assertEqual(self.service().state, "healthy")
+        self.assertIsNone(self.service().process)
+        self.assertEqual(self.spawned, [])
 
     def test_healthy_external_adoption_never_kills_external_then_takes_over(self):
         self.write()
@@ -329,9 +413,9 @@ class SupervisorTests(unittest.TestCase):
         self.health = False
         self.tick(2)
         self.write(arguments=["--offline", *arguments])
-        self.tick(11)
+        self.tick(61)
         self.assertFalse(original.closed)
-        self.tick(12)
+        self.tick(62)
         self.assertTrue(original.closed)
         self.assertEqual(self.service().error, "MCP health check timed out")
 
@@ -526,6 +610,27 @@ class ProcessTests(unittest.TestCase):
         started = time.monotonic()
         self.assertFalse(s.healthy(hang_url, timeout=.2))
         self.assertLess(time.monotonic() - started, 2)
+
+    def test_health_accepts_response_delayed_longer_than_one_second(self):
+        class DelayedHealthHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                time.sleep(1.25)
+                body = json.dumps({"status": "healthy", "message": s.HEALTH_MESSAGE}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_):
+                pass
+
+        with HTTPServer(("127.0.0.1", 0), DelayedHealthHandler) as server:
+            worker = threading.Thread(target=server.handle_request, daemon=True)
+            worker.start()
+            try:
+                self.assertTrue(s.healthy("http://127.0.0.1:{}".format(server.server_port)))
+            finally:
+                worker.join(timeout=5)
 
     def test_owned_process_tree_cleanup_and_exact_argv_with_spaces(self):
         child_file = self.root / "child pid.txt"

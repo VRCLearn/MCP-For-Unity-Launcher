@@ -17,11 +17,13 @@ def prepare():
     result = build(output, url, repository=repository, revision=revision)
     notes = f'''MCP for Unity Launcher {version} starts and manages MCP for Unity's local HTTP service automatically.
 
-This release repairs projects that remain disconnected after the shared server has recovered. It gives upstream reconnection 60 seconds, then rebuilds only the affected project's client. Connection attempts have a 45-second deadline and use fresh clients; late callbacks cannot overwrite their replacements.
+This release waits for an identifying MCP health response before starting a managed local WebSocket. It avoids cold-start connection errors and starts periodic project verification only after a confirmed connection. The window displays the startup wait in all five languages. The 45-second total connection deadline and automatic retry remain in effect when startup takes longer.
 
-Managed local connections must confirm their project session, enabled tools, and a lightweight Editor request round trip. Periodic verification updates both connection windows. Launcher shows registration progress, retry delays, and the last verification in all five languages.
+An owned running server now gets 60 seconds of failed health checks before restart, with a 3-second request timeout. Temporary server work can delay health responses; this change reduces unnecessary restarts that disconnect every project. Exited processes still recover immediately, and external services remain unowned. This is a mitigation for delayed responses; upstream synchronous file scanning is unchanged.
 
-After updating, reopen each project so the managed transport is installed before its first connection. This release updates Launcher only; MCP for Unity 10.3.x remains supported.
+Per-project recovery from 0.4.0 remains available. Managed local connections must confirm their project session, enabled tools, and a lightweight Editor request round trip before reporting Ready. Retiring one project's client does not restart the shared server.
+
+After updating, close all participating Unity Editors, allow the old supervisor to exit, then reopen the projects. This activates both the managed transport and the new supervisor policy. This release updates Launcher only; MCP for Unity 10.3.x remains supported.
 
 - Starts the service and connects Unity when a project opens.
 - Keeps a shared service running when one of several participating editors closes.

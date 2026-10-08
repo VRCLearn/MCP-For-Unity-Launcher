@@ -3,6 +3,8 @@
 This .NET 8 executable **links the production `ManagedHttpTransportClient.cs`**.
 It exercises its deadlines, generation isolation, old task cleanup, readiness
 failures, session changes, configuration cancellation and project independence.
+Health-gate checks require zero raw clients before readiness, bounded waits,
+automatic retry, late cancellation isolation, and unmanaged bypass.
 The single-thread synchronization pump models Unity's Editor-thread awaits.
 
 Run from the repository root:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+- Wait asynchronously for an identifying MCP health response before opening a managed local WebSocket. Keep the 45-second total connection deadline and automatic retries when server startup takes longer.
+- Start periodic project verification only after a confirmed connection, avoiding misleading verification failures during cold startup. Show the startup wait in all five UI languages.
+- Allow an owned running service 60 seconds of failed health checks before restarting it, with a 3-second request timeout. Preserve the process when temporary server work delays health responses; exited processes still recover immediately.
+- Add cold-start, unrelated HTTP service, cancellation, and temporary server-busyness regressions alongside two-Editor recovery checks.
+- Reopen updated projects to install the managed transport. To activate the supervisor changes, close all participating Editors and let the old supervisor exit before reopening them. Launcher remains compatible with MCP for Unity 10.3.x.
+
 ## 0.4.0
 
 - Recover a single project after upstream reconnection makes no progress for 60 seconds, without restarting the shared server or other projects.

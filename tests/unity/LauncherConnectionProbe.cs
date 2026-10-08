@@ -34,6 +34,8 @@ public static class LauncherConnectionProbe
             await VerifyUnmanagedTransport();
             await VerifySessionChangeAndDisabledManagement();
             await VerifyConfigurationTransitionCancellation();
+            await VerifyServerReadinessGate();
+            await VerifyNeverConnectedDoesNotPeriodicallyVerify();
             Debug.Log("LAUNCHER_CONNECTION_VERIFICATION: passed");
         }
         finally
@@ -272,6 +274,123 @@ public static class LauncherConnectionProbe
         }
         Debug.Log("LAUNCHER_CONFIGURATION_TRANSITION_VERIFICATION: passed");
     }
+    private static async Task VerifyServerReadinessGate()
+    {
+        int created = 0;
+        var gate = new TaskCompletionSource<bool>();
+        var adapter = NewWaiting(() => { created++; return new TestClient(); }, token => gate.Task);
+        Task<bool> pending = adapter.StartAsync();
+        Require(created == 0 && !adapter.IsConnected && Waiting(adapter),
+            "Native startup created a raw transport before server readiness");
+        gate.SetResult(true);
+        Require(await Within(pending, "Ready server did not release native startup") && created == 1 && !Waiting(adapter),
+            "Native health gate did not release exactly one client");
+        await adapter.StopAsync();
+
+        created = 0;
+        int waits = 0;
+        var never = new TaskCompletionSource<bool>();
+        adapter = NewWaiting(() => { created++; return new TestClient(); }, token =>
+            ++waits == 1 ? never.Task : Task.FromResult(waits >= 3));
+        Require(!await Within(adapter.StartAsync(), "Native health gate did not time out") && created == 0 && !Waiting(adapter),
+            "Native timed-out readiness created a client or remained in flight");
+        Require(!await Within(adapter.StartAsync(), "Native false health gate did not settle") && created == 0,
+            "Native false readiness was accepted");
+        Require(await Within(adapter.StartAsync(), "Native readiness could not retry") && created == 1,
+            "Native readiness failure prevented a later connection");
+        await adapter.StopAsync();
+
+        created = 0;
+        waits = 0;
+        var oldGate = new TaskCompletionSource<bool>();
+        adapter = NewWaiting(() => { created++; return new TestClient(); }, token =>
+            ++waits == 1 ? oldGate.Task : Task.FromResult(true));
+        Task<bool> obsolete = adapter.StartAsync();
+        Require(Waiting(adapter) && created == 0, "Native old readiness gate was not pending");
+        await Within(adapter.StopAsync(), "Native pending gate blocked Stop");
+        Require(await Within(adapter.StartAsync(), "Native replacement readiness did not connect"), "Native replacement startup failed");
+        oldGate.SetResult(true);
+        Require(!await Within(obsolete, "Native cancelled health gate did not settle") && created == 1 && adapter.IsConnected,
+            "Native late health response created an obsolete client");
+        await adapter.StopAsync();
+
+        created = 0;
+        bool managed = true;
+        var manualGate = new TaskCompletionSource<bool>();
+        adapter = NewWaiting(() => { created++; return new TestClient(); }, token => manualGate.Task, () => managed);
+        Task<bool> manualPending = adapter.StartAsync();
+        Require(Waiting(adapter) && created == 0, "Native manual gate was not pending");
+        managed = false;
+        manualGate.SetResult(true);
+        Require(!await Within(manualPending, "Changed native scope did not settle old health wait") && created == 0 && !Waiting(adapter),
+            "Native local health wait created a raw client after management changed");
+        Require(await Within(adapter.StartAsync(), "Native replacement unmanaged configuration did not connect") && created == 1,
+            "Native manual gate failure blocked the replacement configuration");
+        await adapter.StopAsync();
+
+        int unmanagedWaits = 0;
+        adapter = NewWaiting(() => new TestClient(), token =>
+        {
+            unmanagedWaits++;
+            throw new Exception("Unmanaged startup invoked local health gating");
+        }, () => false);
+        Require(await Within(adapter.StartAsync(), "Native unmanaged startup did not complete") && unmanagedWaits == 0 && !Waiting(adapter),
+            "Native unmanaged transport was blocked by local health gating");
+        await adapter.StopAsync();
+        Debug.Log("LAUNCHER_SERVER_READINESS_GATE_VERIFICATION: passed");
+    }
+
+    private static async Task VerifyNeverConnectedDoesNotPeriodicallyVerify()
+    {
+        int created = 0;
+        int probes = 0;
+        var never = new TaskCompletionSource<bool>();
+        var adapter = NewWaiting(() => { created++; return new TestClient(); }, token => never.Task,
+            probe: token => { probes++; return Task.FromResult("unexpected"); });
+        var manager = new TransportManager();
+        manager.Configure(() => adapter, () => new TestClient());
+        MCPServiceLocator.Register(manager);
+        MCPServiceLocator.Register<IBridgeControlService>(new BridgeControlService());
+        MCPServiceLocator.Register<IServerManagementService>(new UnreachableServer());
+        Invoke("InstallWrapper");
+        Set("_connectedOnce", false);
+        Set("_needsNewEndpoint", false);
+        Set("_nextConnect", 0d);
+        Set("_nextVerify", 0d);
+        Set("_verificationInFlight", false);
+        Set("_disconnectedSince", -1d);
+        Set("_lastConnectionError", null);
+        Set("_connectFailures", 0);
+        await TickConnection();
+        string failure = (string)Get("_lastConnectionError");
+        Require(created == 0 && probes == 0 && !(bool)Get("_connectedOnce"),
+            "First failed native startup created a raw client or marked the project connected");
+        Require(!string.IsNullOrEmpty(failure) && failure.IndexOf("server did not become ready", StringComparison.OrdinalIgnoreCase) >= 0,
+            "Native startup did not preserve its readiness timeout reason");
+        Set("_nextConnect", EditorApplication.timeSinceStartup + 600d);
+        Set("_nextVerify", 0d);
+        await TickConnection();
+        Require((double)Get("_nextVerify") == 0d && !(bool)Get("_verificationInFlight") && probes == 0,
+            "A never-connected native project performed periodic verification");
+        Require((string)Get("_lastConnectionError") == failure,
+            "Premature verification replaced the initial startup failure reason");
+        manager.ForceStop(TransportMode.Http);
+        Debug.Log("LAUNCHER_NO_PREMATURE_VERIFICATION: passed");
+    }
+
+    private static bool Waiting(IMcpTransportClient client)
+        => (bool)client.GetType().GetProperty("WaitingForServer", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(client);
+
+    private static IMcpTransportClient NewWaiting(Func<IMcpTransportClient> factory,
+        Func<CancellationToken, Task<bool>> waitForServer, Func<bool> managed = null,
+        Func<CancellationToken, Task<string>> probe = null)
+    {
+        Type type = Type.GetType("MCPForUnityLauncher.Editor.ManagedHttpTransportClient, MCPForUnityLauncher.Editor", true);
+        return (IMcpTransportClient)Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.NonPublic,
+            null, new object[] { factory, probe ?? (token => Task.FromResult("ready-session")),
+                managed ?? (() => true), TimeSpan.FromMilliseconds(50), waitForServer }, null);
+    }
+
     private static IMcpTransportClient NewManaged(Func<IMcpTransportClient> factory,
         Func<CancellationToken, Task<string>> probe, Func<bool> managed = null)
     {

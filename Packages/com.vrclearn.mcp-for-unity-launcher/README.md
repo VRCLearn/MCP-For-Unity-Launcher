@@ -1,6 +1,6 @@
 # MCP for Unity Launcher
 
-Version 0.4.0 also recovers projects whose own connection remains disconnected after the server has recovered. Launcher allows 60 seconds for upstream reconnection, then rebuilds only that project’s client. Connection attempts have a 45-second deadline; readiness requires its session, enabled tools, and a lightweight Editor round trip. The window shows recovery progress and the last verification. Reopen each project after updating so the managed transport is installed before its first connection. This update only requires a new Launcher package.
+Version 0.4.1 waits for an identifying local MCP health response before opening a WebSocket and delays periodic verification until a connection has succeeded. An owned running server gets 60 seconds of failed health checks before restart, reducing interruptions during temporary work. The connection deadline and per-project recovery from 0.4.0 remain available. After updating, close all participating Editors, let the old supervisor exit, then reopen the projects to activate both changes. MCP for Unity 10.3.x remains supported. This mitigates delayed health responses; upstream file scanning is unchanged.
 
 Install this Unity package through VPM or UPM in every participating project alongside MCP for Unity 10.3.x. On opening a project, Launcher automatically starts a shared local HTTP server and connects the Editor bridge. An independent supervisor keeps the server alive while registered editors remain and restarts owned processes after failures.
 

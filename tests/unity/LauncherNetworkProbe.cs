@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -20,6 +21,17 @@ public static class LauncherNetworkProbe
         string url = Environment.GetEnvironmentVariable("MCP_LAUNCHER_BASE_URL");
         string prefix = Environment.GetEnvironmentVariable("MCP_LAUNCHER_PREF_PREFIX");
         int exitCode = 9;
+        var initialDiagnostics = new List<string>();
+        bool collectInitialDiagnostics = true;
+        Application.LogCallback captureStartup = (message, stackTrace, type) =>
+        {
+            if (!collectInitialDiagnostics) return;
+            bool mcp = message.IndexOf("MCP-FOR-UNITY", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.StartsWith("[MCP for Unity Launcher]", StringComparison.Ordinal);
+            if (mcp && (type == LogType.Error || type == LogType.Exception || type == LogType.Assert ||
+                message.IndexOf("Project verification failed", StringComparison.OrdinalIgnoreCase) >= 0))
+                initialDiagnostics.Add(message);
+        };
         string[] keys = null;
         bool[] existed = null;
         bool[] booleans = null;
@@ -32,6 +44,7 @@ public static class LauncherNetworkProbe
             Require(Uri.TryCreate(url, UriKind.Absolute, out var endpoint) && endpoint.Host == "127.0.0.1" &&
                 endpoint.Port != 8080 && endpoint.Scheme == "http", "Network probe requires an isolated loopback endpoint");
             Require(!EditorUtility.scriptCompilationFailed, "Network project failed to compile");
+            Application.logMessageReceived += captureStartup;
             // Keep this wrapper installed through upstream quit callbacks, which otherwise
             // read a user-wide server ownership handshake.
             Invoke("InstallWrapper");
@@ -51,21 +64,40 @@ public static class LauncherNetworkProbe
             bool retired = false;
             bool stable = false;
             bool restarted = false;
+            bool connectingRecorded = false;
+            bool coldChecked = false;
             DateTime deadline = DateTime.UtcNow.AddMinutes(12);
             while (!File.Exists(Path.Combine(control, label + ".finish")))
             {
                 Require(DateTime.UtcNow < deadline, "Network recovery scenario exceeded its deadline");
                 Invoke("TryConnect");
+                if (label == "A" && !connectingRecorded)
+                {
+                    Record(control, label, "connecting", null, initialDiagnostics);
+                    connectingRecorded = true;
+                }
                 var client = manager.GetClient(TransportMode.Http);
                 string session = client != null && client.IsConnected ? client.State.SessionId : null;
+                if (label == "A" && initial == null && !coldChecked &&
+                    File.Exists(Path.Combine(control, "A.check-cold")))
+                {
+                    Require(client == null || !client.IsConnected, "A was Ready before a real MCP server was started");
+                    Require(initialDiagnostics.Count == 0,
+                        "MCP cold startup logged errors or premature verification failures: " + string.Join("\n", initialDiagnostics));
+                    Record(control, label, "waiting", null, initialDiagnostics);
+                    coldChecked = true;
+                }
                 if (!string.IsNullOrEmpty(session) && session != "pending")
                 {
                     if (initial == null)
                     {
                         Require(await manager.VerifyAsync(TransportMode.Http), "Initial project round trip failed");
+                        Require(initialDiagnostics.Count == 0,
+                            "MCP initial startup logged errors or premature verification failures: " + string.Join("\n", initialDiagnostics));
+                        collectInitialDiagnostics = false;
                         initial = session;
                         beforeRestart = session;
-                        Record(control, label, "ready", session);
+                        Record(control, label, "ready", session, initialDiagnostics);
                     }
                     if (retired && !File.Exists(Path.Combine(control, label + ".recovered.json")) && session != initial)
                     {
@@ -110,6 +142,7 @@ public static class LauncherNetworkProbe
         }
         finally
         {
+            Application.logMessageReceived -= captureStartup;
             MCPServiceLocator.TransportManager.ForceStop(TransportMode.Http);
             if (keys != null)
             {
@@ -124,13 +157,15 @@ public static class LauncherNetworkProbe
         }
     }
 
-    private static void Record(string control, string label, string phase, string session)
+    private static void Record(string control, string label, string phase, string session, List<string> diagnostics = null)
     {
         string destination = Path.Combine(control, label + "." + phase + ".json");
         string temporary = destination + ".tmp";
         File.WriteAllText(temporary, JsonUtility.ToJson(new Result
         {
             project = label, phase = phase, session_id = session,
+            startup_diagnostic_count = diagnostics?.Count ?? 0,
+            startup_diagnostics = diagnostics?.ToArray() ?? new string[0],
             project_path = Path.GetFullPath(Path.Combine(Application.dataPath, "..")),
             verified_utc = DateTimeOffset.UtcNow.ToString("o")
         }, true));
@@ -151,5 +186,7 @@ public static class LauncherNetworkProbe
         public string session_id;
         public string project_path;
         public string verified_utc;
+        public int startup_diagnostic_count;
+        public string[] startup_diagnostics;
     }
 }

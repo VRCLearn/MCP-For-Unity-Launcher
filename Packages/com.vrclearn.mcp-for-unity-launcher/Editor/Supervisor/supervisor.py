@@ -516,7 +516,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def healthy(base_url, timeout=1):
+def healthy(base_url, timeout=3):
     try:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
         with opener.open(base_url + "/health", timeout=timeout) as response:
@@ -562,7 +562,7 @@ class Service:
 
 class Supervisor:
     def __init__(self, state_dir, poll_interval=2, idle_seconds=10, startup_seconds=300,
-                 health_grace=10, stable_seconds=30, clock=time.monotonic,
+                 health_grace=60, stable_seconds=30, clock=time.monotonic,
                  probe=process_state, health=healthy, busy=port_busy, spawn=OwnedProcess):
         self.state_dir = Path(state_dir)
         self.poll_interval, self.idle_seconds = poll_interval, idle_seconds
@@ -600,6 +600,8 @@ class Supervisor:
             return
         service.healthy_since = None
         if service.process:
+            # A busy server event loop can delay health responses without a
+            # process failure. Preserve it through the bounded recovery grace.
             service.state = "starting" if not service.ever_healthy else "unhealthy"
             if service.unhealthy_since is None:
                 service.unhealthy_since = now

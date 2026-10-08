@@ -16,6 +16,7 @@ namespace MCPForUnityLauncher.Editor
         private readonly Func<CancellationToken, Task<string>> _probe;
         private readonly Func<bool> _managed;
         private readonly TimeSpan _timeout;
+        private readonly Func<CancellationToken, Task<bool>> _waitForServer;
         private IMcpTransportClient _client;
         private CancellationTokenSource _attempt;
         private int _generation;
@@ -23,19 +24,27 @@ namespace MCPForUnityLauncher.Editor
         private string _session;
         private string _confirmedRawSession;
         private string _error;
+        internal bool WaitingForServer { get; private set; }
+        internal string LastStartError { get; private set; }
 
         internal ManagedHttpTransportClient() : this(
             () => new WebSocketTransportClient(MCPServiceLocator.ToolDiscovery),
             ProjectRegistrationProbe.VerifyAsync, () => LauncherBootstrap.CanManageLocalServer,
-            TimeSpan.FromSeconds(45)) { }
+            TimeSpan.FromSeconds(45), ProjectRegistrationProbe.WaitForServerAsync) { }
 
         internal ManagedHttpTransportClient(Func<IMcpTransportClient> factory,
             Func<CancellationToken, Task<string>> probe, Func<bool> managed, TimeSpan timeout)
+            : this(factory, probe, managed, timeout, null) { }
+
+        internal ManagedHttpTransportClient(Func<IMcpTransportClient> factory,
+            Func<CancellationToken, Task<string>> probe, Func<bool> managed, TimeSpan timeout,
+            Func<CancellationToken, Task<bool>> waitForServer)
         {
             _factory = factory;
             _probe = probe;
             _managed = managed;
             _timeout = timeout;
+            _waitForServer = waitForServer ?? (token => Task.FromResult(true));
         }
 
         public string TransportName => "http";
@@ -65,21 +74,35 @@ namespace MCPForUnityLauncher.Editor
             _attempt = cancellation;
             _local = _managed();
             bool local = _local;
-            var client = _factory();
-            _client = client;
+            LastStartError = null;
+            IMcpTransportClient client = null;
             Task<bool> start = null;
             string session = null;
             var elapsed = Stopwatch.StartNew();
             try
             {
+                if (local)
+                {
+                    WaitingForServer = true;
+                    bool ready = await WithinAsync(_waitForServer(cancellation.Token), _timeout, cancellation.Token);
+                    if (generation != _generation) return false;
+                    if (!ready) throw new InvalidOperationException("The local MCP server is not ready.");
+                    WaitingForServer = false;
+                }
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (local && !_managed()) throw new OperationCanceledException("Local management changed during connection.");
+                var remaining = _timeout - elapsed.Elapsed;
+                if (remaining <= TimeSpan.Zero) throw new TimeoutException("Project connection deadline expired.");
+                client = _factory();
+                _client = client;
                 start = client.StartAsync();
-                bool connected = await WithinAsync(start, _timeout, cancellation.Token);
+                bool connected = await WithinAsync(start, remaining, cancellation.Token);
                 if (!connected || generation != _generation) return false;
                 if (local)
                 {
                     // Probe retries registration races, but the entire attempt has a
                     // deadline independent of the upstream handshake implementation.
-                    var remaining = _timeout - elapsed.Elapsed;
+                    remaining = _timeout - elapsed.Elapsed;
                     if (remaining <= TimeSpan.Zero) throw new TimeoutException("Project connection deadline expired.");
                     session = await WithinAsync(_probe(cancellation.Token), remaining, cancellation.Token);
                     if (string.IsNullOrEmpty(session)) throw new InvalidOperationException("Project registration is incomplete.");
@@ -96,6 +119,9 @@ namespace MCPForUnityLauncher.Editor
                 {
                     _session = null;
                     _error = exception is OperationCanceledException ? "Project connection was cancelled." : exception.Message;
+                    if (exception is TimeoutException && WaitingForServer)
+                        _error = "The local MCP server did not become ready before the connection deadline. Retrying automatically.";
+                    LastStartError = _error;
                     cancellation.Cancel();
                     Retire(client);
                 }
@@ -106,6 +132,7 @@ namespace MCPForUnityLauncher.Editor
                 if (start != null && (!start.IsCompleted || generation != _generation))
                     _ = RetireAfterAsync(start, client);
                 if (ReferenceEquals(_attempt, cancellation)) _attempt = null;
+                if (generation == _generation) WaitingForServer = false;
                 cancellation.Dispose();
             }
         }
@@ -118,6 +145,7 @@ namespace MCPForUnityLauncher.Editor
             _client = null;
             _session = null;
             _error = null;
+            WaitingForServer = false;
             Retire(client);
             return Task.CompletedTask;
         }

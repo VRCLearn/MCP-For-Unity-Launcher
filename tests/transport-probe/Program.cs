@@ -30,6 +30,11 @@ internal static class Program
 
     private static async Task Run()
     {
+        await Check("server readiness precedes raw client creation", ServerGateBeforeClient);
+        await Check("timed out and false readiness gates allow a later retry", ServerGateRetry);
+        await Check("a cancelled old server gate cannot create a client", StaleServerGate);
+        await Check("unmanaged sessions bypass the local readiness gate", UnmanagedServerGate);
+        await Check("a management change invalidates a pending manual readiness wait", ChangedManagementGate);
         await Check("hung start and hung cleanup allow a fresh generation", HungStart);
         await Check("late old success is retired without overwriting the replacement", LateSuccess);
         await Check("failed, empty and hung probes cannot report Ready", ProbeFailures);
@@ -52,6 +57,93 @@ internal static class Program
     private static ManagedHttpTransportClient Adapter(Func<IMcpTransportClient> factory,
         Func<CancellationToken, Task<string>> probe = null, Func<bool> managed = null)
         => new ManagedHttpTransportClient(factory, probe ?? (_ => Task.FromResult("confirmed")), managed ?? (() => true), Deadline);
+
+    private static ManagedHttpTransportClient WaitingAdapter(Func<IMcpTransportClient> factory,
+        Func<CancellationToken, Task<bool>> waitForServer, Func<bool> managed = null)
+        => new ManagedHttpTransportClient(factory, _ => Task.FromResult("confirmed"), managed ?? (() => true), Deadline, waitForServer);
+
+    private static async Task ServerGateBeforeClient()
+    {
+        int created = 0;
+        var gate = new TaskCompletionSource<bool>();
+        var adapter = WaitingAdapter(() => { created++; return new FakeClient(); }, _ => gate.Task);
+        Task<bool> pending = adapter.StartAsync();
+        Require(created == 0 && adapter.WaitingForServer && !adapter.IsConnected,
+            "Raw client was created or Ready was published before server readiness");
+        gate.SetResult(true);
+        Require(await Timely(pending) && created == 1 && !adapter.WaitingForServer,
+            "A healthy server did not release exactly one raw connection");
+        await adapter.StopAsync();
+    }
+
+    private static async Task ServerGateRetry()
+    {
+        int waits = 0;
+        int created = 0;
+        var never = new TaskCompletionSource<bool>();
+        var adapter = WaitingAdapter(() => { created++; return new FakeClient(); }, _ =>
+            ++waits == 1 ? never.Task : Task.FromResult(waits >= 3));
+        Require(!await Timely(adapter.StartAsync()) && created == 0 && !adapter.WaitingForServer,
+            "A hung readiness gate created a raw client or remained in flight");
+        Require(!string.IsNullOrEmpty(adapter.LastStartError), "Readiness timeout lost its failure reason");
+        Require(!await Timely(adapter.StartAsync()) && created == 0,
+            "A false readiness gate was accepted");
+        Require(await Timely(adapter.StartAsync()) && created == 1 && adapter.LastStartError == null,
+            "A later healthy server could not recover after readiness failure");
+        await adapter.StopAsync();
+    }
+
+    private static async Task StaleServerGate()
+    {
+        int waits = 0;
+        int created = 0;
+        var old = new TaskCompletionSource<bool>();
+        var adapter = WaitingAdapter(() => { created++; return new FakeClient(); }, _ =>
+            ++waits == 1 ? old.Task : Task.FromResult(true));
+        Task<bool> obsolete = adapter.StartAsync();
+        Require(adapter.WaitingForServer && created == 0, "Old gate fixture was not pending");
+        await Timely(adapter.StopAsync());
+        Require(await Timely(adapter.StartAsync()) && created == 1, "Replacement gate did not connect");
+        old.SetResult(true);
+        Require(!await Timely(obsolete) && created == 1 && adapter.IsConnected,
+            "A cancelled old gate created a raw client or replaced the new session");
+        await adapter.StopAsync();
+    }
+
+    private static async Task UnmanagedServerGate()
+    {
+        int waits = 0;
+        var raw = new FakeClient();
+        var adapter = WaitingAdapter(() => raw, _ =>
+        {
+            waits++;
+            throw new InvalidOperationException("Local health gate must not run for an unmanaged session");
+        }, () => false);
+        Require(await Timely(adapter.StartAsync()) && waits == 0 && raw.Starts == 1,
+            "Unmanaged connection was gated on the local MCP server");
+        Require(adapter.State.SessionId == "raw" && !adapter.WaitingForServer,
+            "Unmanaged readiness or transport state was changed");
+        await adapter.StopAsync();
+    }
+
+    private static async Task ChangedManagementGate()
+    {
+        bool managed = true;
+        int created = 0;
+        var gate = new TaskCompletionSource<bool>();
+        var adapter = WaitingAdapter(() => { created++; return new FakeClient(); }, _ => gate.Task, () => managed);
+        Task<bool> pending = adapter.StartAsync();
+        Require(adapter.WaitingForServer && created == 0, "Manual local readiness fixture was not pending");
+        // No Launcher cancellation callback: a manual upstream StartAsync can be
+        // waiting while the user changes scope or disables automatic management.
+        managed = false;
+        gate.SetResult(true);
+        Require(!await Timely(pending) && created == 0 && !adapter.WaitingForServer,
+            "A changed management scope created a raw client from an old local wait");
+        Require(await Timely(adapter.StartAsync()) && created == 1 && adapter.State.SessionId == "raw",
+            "The replacement unmanaged configuration could not start normally");
+        await adapter.StopAsync();
+    }
 
     private static async Task HungStart()
     {

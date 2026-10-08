@@ -2,7 +2,7 @@
 
 **English** | [日本語](docs/i18n/README-ja.md) | [한국어](docs/i18n/README-ko.md) | [繁體中文](docs/i18n/README-zh-TW.md) | [简体中文](docs/i18n/README-zh.md)
 
-Version 0.4.0 also recovers projects whose own connection remains disconnected after the server has recovered. Launcher allows 60 seconds for upstream reconnection, then rebuilds only that project’s client. Connection attempts have a 45-second deadline; readiness requires its session, enabled tools, and a lightweight Editor round trip. The window shows recovery progress and the last verification. Reopen each project after updating so the managed transport is installed before its first connection. This update only requires a new Launcher package.
+Version 0.4.1 waits for the local MCP server to become healthy before opening a WebSocket, avoiding cold-start connection errors and premature verification warnings. It also gives a running server 60 seconds of failed health checks before restarting it, so temporary work is less likely to interrupt every project. Project recovery and verified readiness from 0.4.0 remain available. After updating Launcher, close all participating Editors, allow the old supervisor to exit, and reopen the projects to activate both changes. MCP for Unity 10.3.x remains supported; this update mitigates delayed health responses but does not change upstream file scanning.
 
 A Unity Editor addon for [MCP for Unity](https://github.com/VRCLearn/unity-mcp), installable through VPM or UPM, that starts its local server when you open a Unity project and keeps it running across multiple editors.
 

@@ -36,6 +36,7 @@ namespace MCPForUnityLauncher.Editor
             { "Project connection", new[] { "プロジェクトの接続", "프로젝트 연결", "專案連線", "项目连接" } },
             { "Connected", new[] { "接続済み", "연결됨", "已連線", "已连接" } },
             { "Connecting and registering", new[] { "接続・登録中", "연결 및 등록 중", "正在連線及註冊", "正在连接并注册" } },
+            { "Waiting for local server startup", new[] { "ローカルサーバーの起動を待機中", "로컬 서버 시작 대기 중", "等待本機伺服器啟動", "等待本地服务器启动" } },
             { "Verifying project connection", new[] { "プロジェクト接続を確認中", "프로젝트 연결 확인 중", "正在驗證專案連線", "正在验证项目连接" } },
             { "Waiting for upstream reconnection", new[] { "MCP の再接続を待機中", "MCP 재연결 대기 중", "等待 MCP 重新連線", "等待 MCP 重新连接" } },
             { "Retry in {0} seconds", new[] { "{0} 秒後に再試行", "{0}초 후 재시도", "{0} 秒後重試", "{0} 秒后重试" } },
