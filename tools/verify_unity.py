@@ -49,6 +49,7 @@ def main():
         if expected == "1":
             shutil.copytree(args.mcp_package, project / "Packages/com.coplaydev.unity-mcp", ignore=ignore)
             shutil.copy2(repository / "tests/unity/LauncherConnectionProbe.cs", project / "Assets/Editor/LauncherConnectionProbe.cs")
+            shutil.copy2(repository / "tests/unity/LauncherMaintenanceProbe.cs", project / "Assets/Editor/LauncherMaintenanceProbe.cs")
         log = project / "unity.log"
         environment = dict(os.environ, MCP_LAUNCHER_EXPECT_INTEGRATION=expected)
         command = [str(args.unity_executable.resolve()), "-batchmode", "-nographics", "-projectPath", str(project),
@@ -60,6 +61,8 @@ def main():
             raise RuntimeError(f"{scenario} failed (exit {result.returncode}); inspect {log}")
         if expected == "1" and "LAUNCHER_CONNECTION_VERIFICATION: passed" not in text:
             raise RuntimeError(f"{scenario} connection recovery probes did not complete; inspect {log}")
+        if expected == "1" and "LAUNCHER_MAINTENANCE_VERIFICATION: passed" not in text:
+            raise RuntimeError(f"{scenario} background maintenance probes did not complete; inspect {log}")
         print(f"{scenario}: passed", flush=True)
 
 

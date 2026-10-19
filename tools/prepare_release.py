@@ -17,13 +17,15 @@ def prepare():
     result = build(output, url, repository=repository, revision=revision)
     notes = f'''MCP for Unity Launcher {version} starts and manages MCP for Unity's local HTTP service automatically.
 
-This release waits for an identifying MCP health response before starting a managed local WebSocket. It avoids cold-start connection errors and starts periodic project verification only after a confirmed connection. The window displays the startup wait in all five languages. The 45-second total connection deadline and automatic retry remain in effect when startup takes longer.
+This release fixes periodic Unity Editor stalls caused by synchronous uvx cache probes in Launcher 0.4.1. Launch settings are cached, and filesystem and process maintenance run on one background worker without blocking the Editor update callback. Status windows read cached results.
 
-An owned running server now gets 60 seconds of failed health checks before restart, with a 3-second request timeout. Temporary server work can delay health responses; this change reduces unnecessary restarts that disconnect every project. Exited processes still recover immediately, and external services remain unowned. This is a mitigation for delayed responses; upstream synchronous file scanning is unchanged.
+Project registration is verified when connecting or when the underlying WebSocket session changes, removing repeated verification while a confirmed connection remains healthy. Session changes during an in-flight verification cannot mark an obsolete connection as ready. Serialized lease and release writes also prevent late background work from reviving a disabled editor registration.
 
-Per-project recovery from 0.4.0 remains available. Managed local connections must confirm their project session, enabled tools, and a lightweight Editor request round trip before reporting Ready. Retiring one project's client does not restart the shared server.
+Multi-project sharing, automatic server recovery, and shutdown after the last managed Unity Editor exits are preserved. Server identity checks, external-server ownership, startup readiness, and busy-server tolerance remain in effect. MCP for Unity 10.3.x remains supported.
 
-After updating, close all participating Unity Editors, allow the old supervisor to exit, then reopen the projects. This activates both the managed transport and the new supervisor policy. This release updates Launcher only; MCP for Unity 10.3.x remains supported.
+The fix was previously tested locally as unreleased 0.4.2; 1.0.0 is its public release. On Windows with Unity 2022.3.22f1, a 90-second low-overhead check of the repaired Launcher update callback recorded a maximum of 10.9 ms and no callback over 16 ms, with the project remaining connected. This measures Launcher work, not unrelated Editor plugins. See the [verification record](https://github.com/VRCLearn/MCP-For-Unity-Launcher/blob/main/docs/verification.md) for automated coverage and platform limits.
+
+Refresh the VPM repository and update **MCP for Unity Launcher** to **1.0.0** in every participating project. Reopen Unity after updating to load the repaired Editor assembly.
 
 - Starts the service and connects Unity when a project opens.
 - Keeps a shared service running when one of several participating editors closes.

@@ -1,7 +1,7 @@
 {
     "name": "com.vrclearn.mcp-for-unity-launcher",
     "displayName": "MCP for Unity Launcher",
-    "version": "0.4.1",
+    "version": "1.0.0",
     "unity": "2021.3",
     "description": "Automatically starts and supervises a shared local MCP for Unity server across Unity editors. Keeps the server alive while any registered editor is running and recovers from unexpected server exits.",
     "author": {
@@ -12,5 +12,11 @@
     "vpmDependencies": {
         "com.coplaydev.unity-mcp": ">=10.3.0 <11.0.0"
     },
-    "keywords": ["unity", "mcp", "launcher", "vpm", "auto-start"]
+    "keywords": [
+        "unity",
+        "mcp",
+        "launcher",
+        "vpm",
+        "auto-start"
+    ]
 }

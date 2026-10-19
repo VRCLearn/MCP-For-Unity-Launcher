@@ -10,7 +10,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using MCPForUnity.Editor.Helpers;
 using MCPForUnity.Editor.Services;
-using MCPForUnity.Editor.Services.Server;
 using MCPForUnity.Editor.Services.Transport;
 using MCPForUnity.Editor.Services.Transport.Transports;
 using UnityEditor;
@@ -79,7 +78,7 @@ namespace MCPForUnityLauncher.Editor
         private static int _processId;
         private static string _processStart;
         private static double _nextTick;
-        private static double _nextSpawn;
+        private static DateTime _nextSpawnUtc;
         private static double _nextConnect;
         private static int _connectFailures;
         private static bool _connectInFlight;
@@ -88,7 +87,7 @@ namespace MCPForUnityLauncher.Editor
         private static string _lastLocalUrl;
         private static TransportManager _configuredManager;
         private static double _disconnectedSince = -1;
-        private static double _nextVerify;
+        private static double _nextVerify; // Retry deadline for an unconfirmed recovered socket only.
         private static bool _verificationInFlight;
         private static int _connectionGeneration;
         private static string _lastVerifiedUtc;
@@ -107,15 +106,7 @@ namespace MCPForUnityLauncher.Editor
         internal static string LogDirectory => StateDirectory;
         internal static string LaunchLogPath => Path.Combine(StateDirectory, "supervisor.log");
         internal static bool HasSupervisorLaunch => _launchProcess != null;
-        internal static bool IsSupervisorLaunchAlive
-        {
-            get
-            {
-                try { if (_launchProcess != null && !_launchProcess.HasExited) return true; }
-                catch { }
-                return IsSupervisorHealthy;
-            }
-        }
+        internal static bool IsSupervisorLaunchAlive => _launchAlive || IsSupervisorHealthy;
         internal static bool Enabled
         {
             get => EditorPrefs.GetBool(PreferenceKey, true);
@@ -123,6 +114,7 @@ namespace MCPForUnityLauncher.Editor
             {
                 if (Enabled == value) return;
                 EditorPrefs.SetBool(PreferenceKey, value);
+                CancelMaintenance();
                 if (value)
                 {
                     InstallWrapper();
@@ -146,23 +138,48 @@ namespace MCPForUnityLauncher.Editor
         internal static bool IsRemote => HttpEndpointUtility.IsRemoteScope();
         internal static string BaseUrl => HttpEndpointUtility.GetLocalBaseUrl();
         internal static bool CanManageLocalServer => Enabled && !IsRemote && IsAllowedUrl(BaseUrl);
-        internal static bool IsSupervisorHealthy
+        private static Task<MaintenanceResult> _maintenance;
+        private static CancellationTokenSource _maintenanceCancellation;
+        private static int _maintenanceGeneration;
+        private static ServerSettings _settings;
+        private static ServerSettings _activeSettings;
+        private static bool _releaseQueued;
+        private static SupervisorStatus _status;
+        private static bool _supervisorHealthy;
+        private static bool _launchAlive;
+        private static string _packageRoot;
+
+        private sealed class ServerSettings
         {
-            get
-            {
-                var status = ReadStatus();
-                if (status == null || status.supervisorPid <= 0 || !DateTimeOffset.TryParse(
-                        status.updatedUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var updated))
-                    return false;
-                var age = DateTimeOffset.UtcNow - updated;
-                if (age.TotalSeconds < -5 || age.TotalSeconds > 15) return false;
-                try
-                {
-                    using (var process = Process.GetProcessById(status.supervisorPid))
-                        return !process.HasExited;
-                }
-                catch { return false; }
-            }
+            internal string Key;
+            internal string Root;
+            internal string Version;
+            internal string UvxOverride;
+            internal string Url;
+            internal string[] Arguments;
+            internal string Executable;
+        }
+
+        private sealed class MaintenanceResult
+        {
+            internal int Generation;
+            internal SupervisorStatus Status;
+            internal bool Healthy;
+            internal bool Started;
+            internal bool LaunchAlive;
+            internal string Error;
+            internal bool Released;
+        }
+
+        internal static bool IsSupervisorHealthy => _supervisorHealthy && StatusIsFresh(_status);
+
+        private static bool StatusIsFresh(SupervisorStatus status)
+        {
+            if (status == null || status.supervisorPid <= 0 || !DateTimeOffset.TryParse(
+                    status.updatedUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var updated))
+                return false;
+            var age = DateTimeOffset.UtcNow - updated;
+            return age.TotalSeconds >= -5 && age.TotalSeconds <= 15;
         }
 
         static LauncherBootstrap()
@@ -204,7 +221,8 @@ namespace MCPForUnityLauncher.Editor
 
         private static void Update()
         {
-            if (_quitting || EditorApplication.timeSinceStartup < _nextTick) return;
+            CompleteMaintenance();
+            if (_quitting || Lifetime.IsCancellationRequested || EditorApplication.timeSinceStartup < _nextTick) return;
             _nextTick = EditorApplication.timeSinceStartup + 2;
             if (!Enabled)
             {
@@ -234,6 +252,7 @@ namespace MCPForUnityLauncher.Editor
                 {
                     _connectionGeneration++;
                     CancelPendingConnection();
+                    CancelMaintenance();
                     _connectedOnce = false;
                     _disconnectedSince = -1;
                     _needsNewEndpoint = true;
@@ -241,13 +260,7 @@ namespace MCPForUnityLauncher.Editor
                 }
                 _lastLocalUrl = BaseUrl;
                 // A running server can accept this project even if local launch fails.
-                try
-                {
-                    WriteLease();
-                    EnsureSupervisor();
-                    _lastError = null;
-                }
-                catch (Exception exception) { SetError(exception.Message); }
+                QueueMaintenance();
                 TryConnect();
             }
             catch (Exception exception) { SetError(exception.Message); }
@@ -256,17 +269,136 @@ namespace MCPForUnityLauncher.Editor
         internal static bool RequestServerStart()
         {
             if (!CanManageLocalServer) return false;
+            _nextSpawnUtc = DateTime.MinValue;
+            QueueMaintenance();
+            return true;
+        }
+
+        // Capture Unity configuration on the Editor thread. No executable is run here.
+        private static ServerSettings CaptureSettings()
+        {
+            string uvx = EditorPrefs.GetString("MCPForUnity.UvxPath", "");
+            string source = EditorPrefs.GetString("MCPForUnity.GitUrlOverride", "");
+            bool refresh = EditorPrefs.GetBool("MCPForUnity.DevModeForceServerRefresh", false);
+            bool scoped = EditorPrefs.GetBool("MCPForUnity.ProjectScopedTools.LocalHttp", true);
+            string url = BaseUrl;
+            string key = JsonUtility.ToJson(new EditorLease { executable = uvx, baseUrl = url,
+                arguments = new[] { source, refresh.ToString(), scoped.ToString() } });
+            if (_settings != null && _settings.Key == key) return _settings;
+            if (_packageRoot == null)
+            {
+                var package = PackageInfo.FindForAssembly(typeof(LauncherBootstrap).Assembly);
+                _packageRoot = package?.resolvedPath;
+                _packageVersion = package?.version;
+                if (string.IsNullOrEmpty(_packageRoot))
+                {
+                    foreach (var guid in AssetDatabase.FindAssets("LauncherBootstrap t:MonoScript"))
+                    {
+                        string asset = AssetDatabase.GUIDToAssetPath(guid);
+                        if (Path.GetFileName(asset) != "LauncherBootstrap.cs") continue;
+                        _packageRoot = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(asset), ".."));
+                        break;
+                    }
+                    if (_packageRoot != null)
+                        _packageVersion = JsonUtility.FromJson<PackageMetadata>(File.ReadAllText(
+                            Path.Combine(_packageRoot, "package.json"))).version;
+                }
+                if (string.IsNullOrEmpty(_packageRoot) || string.IsNullOrEmpty(_packageVersion))
+                    throw new InvalidOperationException("Could not locate the Launcher package and version.");
+            }
+            var arguments = new List<string>();
+            // Preserve explicit development refresh flags, without invoking the upstream offline probe.
+            string flags = AssetPathUtility.GetUvxDevFlags(AssetPathUtility.ShouldForceUvxRefresh(), false);
+            arguments.AddRange(flags.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+            arguments.AddRange(AssetPathUtility.GetBetaServerFromArgsList());
+            arguments.AddRange(new[] { "mcp-for-unity", "--transport", "http", "--http-url", url });
+            if (scoped) arguments.Add("--project-scoped-tools");
+            _settings = new ServerSettings { Key = key, Root = _packageRoot, Version = _packageVersion,
+                UvxOverride = uvx, Url = url, Arguments = arguments.ToArray() };
+            return _settings;
+        }
+
+        private static void CancelMaintenance()
+        {
+            _maintenanceGeneration++;
+            _maintenanceCancellation?.Cancel();
+        }
+
+        private static void CompleteMaintenance()
+        {
+            if (_maintenance == null || !_maintenance.IsCompleted) return;
+            var completed = _maintenance;
+            _maintenance = null;
+            _maintenanceCancellation?.Dispose();
+            _maintenanceCancellation = null;
             try
             {
-                WriteLease();
-                EnsureSupervisor();
-                return true;
+                var result = completed.GetAwaiter().GetResult(); // Already completed; never waits on I/O.
+                if (result.Released) _releaseQueued = false;
+                if (result.Generation != _maintenanceGeneration) return;
+                _status = result.Status;
+                _supervisorHealthy = result.Healthy;
+                _launchAlive = result.LaunchAlive;
+                if (result.Error != null)
+                {
+                    if (result.Released) _lastReleaseJson = null; // Retry a failed release.
+                    SetError(result.Error);
+                }
+                else _lastError = null;
+                if (result.Started) Debug.Log(LogPrefix + "Starting the shared server supervisor.");
             }
-            catch (Exception exception)
+            catch (OperationCanceledException) { _releaseQueued = false; }
+            catch (Exception exception) { _releaseQueued = false; SetError(exception.Message); }
+        }
+
+        private static void QueueMaintenance()
+        {
+            CompleteMaintenance();
+            if (_releaseQueued || Lifetime.IsCancellationRequested) return;
+            try
             {
-                SetError(exception.Message);
-                return false;
+                var settings = CaptureSettings();
+                if (_maintenance != null)
+                {
+                    if (!ReferenceEquals(settings, _activeSettings) &&
+                        _maintenanceCancellation != null && !_maintenanceCancellation.IsCancellationRequested)
+                        CancelMaintenance();
+                    return;
+                }
+                InitializeIdentity();
+                int generation = _maintenanceGeneration;
+                _maintenanceCancellation = CancellationTokenSource.CreateLinkedTokenSource(Lifetime.Token);
+                var token = _maintenanceCancellation.Token;
+                _activeSettings = settings;
+                _lastReleaseJson = null;
+                _maintenance = Task.Run(() =>
+                {
+                    var result = new MaintenanceResult { Generation = generation };
+                    try
+                    {
+                        WriteLease(settings, token);
+                        result.Status = ReadStatusFromDisk();
+                        result.Healthy = CheckSupervisor(result.Status);
+                        if (!result.Healthy) result.Started = EnsureSupervisor(settings, token);
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception exception) { result.Error = exception.Message; }
+                    try { result.LaunchAlive = _launchProcess != null && !_launchProcess.HasExited; }
+                    catch { result.LaunchAlive = false; }
+                    return result;
+                }, token);
             }
+            catch (Exception exception) { SetError(exception.Message); }
+        }
+
+        private static bool CheckSupervisor(SupervisorStatus status)
+        {
+            if (!StatusIsFresh(status)) return false;
+            try
+            {
+                using (var process = Process.GetProcessById(status.supervisorPid)) return !process.HasExited;
+            }
+            catch { return false; }
         }
 
         private static void InitializeIdentity()
@@ -280,90 +412,52 @@ namespace MCPForUnityLauncher.Editor
             _leasePath = Path.Combine(StateDirectory, "editors", _processId + "-" + _processStart + ".json");
         }
 
-        private static void WriteLease()
+        // These methods run only on the serial background maintenance worker.
+        private static void WriteLease(ServerSettings settings, CancellationToken token)
         {
-            InitializeIdentity();
-            ResolveScript();
-            var uvx = ResolveExecutable(MCPServiceLocator.Paths.GetUvxPath());
-            if (uvx == null)
-                throw new InvalidOperationException("uvx was not found. Install uv and configure the uvx path in MCP for Unity's Advanced Settings.");
-            var arguments = new List<string>(AssetPathUtility.GetUvxDevFlagsList());
-            arguments.AddRange(AssetPathUtility.GetBetaServerFromArgsList());
-            arguments.AddRange(new[] { "mcp-for-unity", "--transport", "http", "--http-url", BaseUrl });
-            if (EditorPrefs.GetBool("MCPForUnity.ProjectScopedTools.LocalHttp", true))
-                arguments.Add("--project-scoped-tools");
-            var lease = new EditorLease
-            {
-                processId = _processId,
-                processStartFileTimeUtc = _processStart,
-                projectPath = ProjectPath,
-                baseUrl = BaseUrl,
-                executable = uvx,
-                arguments = arguments.ToArray(),
-                packageVersion = _packageVersion
-            };
+            token.ThrowIfCancellationRequested();
+            if (settings.Executable == null)
+                settings.Executable = ResolveExecutable(string.IsNullOrWhiteSpace(settings.UvxOverride) ? "uvx" : settings.UvxOverride);
+            if (settings.Executable == null)
+                throw new InvalidOperationException("uvx was not found. Install uv or correct the configured uvx path.");
+            var lease = new EditorLease { processId = _processId, processStartFileTimeUtc = _processStart,
+                projectPath = ProjectPath, baseUrl = settings.Url, executable = settings.Executable,
+                arguments = settings.Arguments, packageVersion = settings.Version };
             string json = JsonUtility.ToJson(lease, true);
+            token.ThrowIfCancellationRequested();
             if (json == _lastLeaseJson && File.Exists(_leasePath)) return;
             AtomicWrite(_leasePath, json);
             _lastLeaseJson = json;
             _lastReleaseJson = null;
         }
 
-        private static void ResolveScript()
+        private static bool EnsureSupervisor(ServerSettings settings, CancellationToken token)
         {
-            if (_scriptPath != null && File.Exists(_scriptPath)) return;
-            var package = PackageInfo.FindForAssembly(typeof(LauncherBootstrap).Assembly);
-            string root = package?.resolvedPath;
-            _packageVersion = package?.version;
-            if (string.IsNullOrEmpty(root))
+            if (DateTime.UtcNow < _nextSpawnUtc) return false;
+            _nextSpawnUtc = DateTime.UtcNow.AddSeconds(15);
+            var uv = ResolveExecutable(Path.Combine(Path.GetDirectoryName(settings.Executable),
+                "uv" + Path.GetExtension(settings.Executable)));
+            if (uv == null) throw new InvalidOperationException("uv was not found alongside uvx. Install the complete uv runtime.");
+            if (_scriptPath == null || !File.Exists(_scriptPath))
             {
-                foreach (var guid in AssetDatabase.FindAssets("LauncherBootstrap t:MonoScript"))
-                {
-                    string asset = AssetDatabase.GUIDToAssetPath(guid);
-                    if (Path.GetFileName(asset) != "LauncherBootstrap.cs") continue;
-                    root = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(asset), ".."));
-                    break;
-                }
-                if (root != null)
-                {
-                    var metadata = JsonUtility.FromJson<PackageMetadata>(File.ReadAllText(Path.Combine(root, "package.json")));
-                    _packageVersion = metadata.version;
-                }
+                if (settings.Version.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || settings.Version.Contains(".."))
+                    throw new InvalidOperationException("The Launcher package version is invalid.");
+                string source = Path.Combine(settings.Root, "Editor", "Supervisor", "supervisor.py");
+                string destination = Path.Combine(StateDirectory, "runtime", settings.Version, "supervisor.py");
+                string text = File.ReadAllText(source);
+                token.ThrowIfCancellationRequested();
+                if (!File.Exists(destination) || File.ReadAllText(destination) != text) AtomicWrite(destination, text);
+                _scriptPath = destination;
             }
-            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(_packageVersion))
-                throw new InvalidOperationException("Could not locate the Launcher package and version. Check the package installation.");
-            if (_packageVersion.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || _packageVersion.Contains(".."))
-                throw new InvalidOperationException("The Launcher package version is invalid.");
-            string source = Path.Combine(root, "Editor", "Supervisor", "supervisor.py");
-            if (!File.Exists(source)) throw new FileNotFoundException("The Launcher package is missing supervisor.py. Reinstall the package.");
-            string destination = Path.Combine(StateDirectory, "runtime", _packageVersion, "supervisor.py");
-            string text = File.ReadAllText(source);
-            if (!File.Exists(destination) || File.ReadAllText(destination) != text) AtomicWrite(destination, text);
-            _scriptPath = destination;
-        }
-
-        private static void EnsureSupervisor()
-        {
-            if (IsSupervisorHealthy || EditorApplication.timeSinceStartup < _nextSpawn) return;
-            _nextSpawn = EditorApplication.timeSinceStartup + 15;
-            var uvx = ResolveExecutable(MCPServiceLocator.Paths.GetUvxPath());
-            var uv = uvx == null ? null : ResolveExecutable(new ServerCommandBuilder().BuildUvPathFromUvx(uvx));
-            if (uv == null)
-                throw new InvalidOperationException("uv was not found alongside uvx. Install the complete uv runtime or correct the uvx path.");
-            ResolveScript();
-            var info = new ProcessStartInfo
-            {
-                FileName = uv,
+            var info = new ProcessStartInfo { FileName = uv,
                 Arguments = JoinArguments(new[] { "run", "--no-project", "--python", ">=3.10", _scriptPath, "--state-dir", StateDirectory }),
-                WorkingDirectory = StateDirectory,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+                WorkingDirectory = StateDirectory, UseShellExecute = false, CreateNoWindow = true };
+            token.ThrowIfCancellationRequested();
             Directory.CreateDirectory(StateDirectory);
             _launchProcess?.Dispose();
             _launchProcess = Process.Start(info);
             if (_launchProcess == null) throw new InvalidOperationException("Could not start the shared MCP server supervisor.");
-            Debug.Log(LogPrefix + "Starting the shared server supervisor.");
+            return true;
         }
 
         private static void TryConnect()
@@ -371,7 +465,7 @@ namespace MCPForUnityLauncher.Editor
             if (_connectInFlight || Lifetime.IsCancellationRequested || EditorApplication.isCompiling || EditorApplication.isUpdating)
                 return;
             var client = MCPServiceLocator.TransportManager.GetClient(TransportMode.Http);
-            if (_connectedOnce && client is ManagedHttpTransportClient &&
+            if (client is ManagedHttpTransportClient managed && managed.NeedsVerification &&
                 !_verificationInFlight && EditorApplication.timeSinceStartup >= _nextVerify && !_needsNewEndpoint)
                 _ = VerifyConnectionAsync();
             if (!_needsNewEndpoint && client != null && client.IsConnected)
@@ -380,8 +474,6 @@ namespace MCPForUnityLauncher.Editor
                 _connectFailures = 0;
                 _lastConnectionError = null;
                 _disconnectedSince = -1;
-                if (!_verificationInFlight && EditorApplication.timeSinceStartup >= _nextVerify)
-                    _ = VerifyConnectionAsync();
                 return;
             }
             // Explicit Stop/ForceStop clears the transport error and cancels upstream
@@ -466,6 +558,7 @@ namespace MCPForUnityLauncher.Editor
                     _connectFailures = 0;
                     _disconnectedSince = -1;
                     _nextVerify = 0;
+                    _lastVerifiedUtc = DateTimeOffset.UtcNow.ToString("u", CultureInfo.InvariantCulture);
                     _lastConnectionError = null;
                     Debug.Log(LogPrefix + "The Unity project automatically connected to " + requestedUrl + ".");
                 }
@@ -492,6 +585,7 @@ namespace MCPForUnityLauncher.Editor
         private static void BeforeReload()
         {
             Lifetime.Cancel();
+            CancelMaintenance();
             EditorApplication.update -= Update;
             if (_connectInFlight && !IsRemote)
                 MCPServiceLocator.TransportManager.ForceStop(TransportMode.Http);
@@ -508,27 +602,30 @@ namespace MCPForUnityLauncher.Editor
 
         private static void RemoveLease()
         {
-            try
+            // Queue the tombstone AFTER every prior active write. This task does not need
+            // UnitySynchronizationContext and can finish while the Editor is quitting.
+            if (_releaseQueued || (_lastReleaseJson != null && _maintenance == null)) return;
+            InitializeIdentity();
+            CancelMaintenance();
+            string json = JsonUtility.ToJson(new EditorLease { processId = _processId,
+                processStartFileTimeUtc = _processStart, released = true }, true);
+            _lastReleaseJson = json;
+            _releaseQueued = true;
+            var previous = _maintenance;
+            int generation = _maintenanceGeneration;
+            _maintenance = Task.Run(async () =>
             {
-                // A reload may switch directly to remote or disable management before
-                // its first tick. Resolve our identity even if this domain wrote no lease.
-                InitializeIdentity();
-                var release = new EditorLease
-                {
-                    processId = _processId,
-                    processStartFileTimeUtc = _processStart,
-                    released = true
-                };
-                string json = JsonUtility.ToJson(release, true);
-                _lastLeaseJson = null;
-                if (_lastReleaseJson == json && File.Exists(_leasePath)) return;
-                AtomicWrite(_leasePath, json);
-                _lastReleaseJson = json;
-            }
-            catch (Exception exception) { SetError("Could not unregister this Editor: " + exception.Message); }
+                if (previous != null) { try { await previous.ConfigureAwait(false); } catch { } }
+                var result = new MaintenanceResult { Generation = generation, Released = true };
+                try { AtomicWrite(_leasePath, json); _lastLeaseJson = null; _lastReleaseJson = json; }
+                catch (Exception exception) { result.Error = "Could not unregister this Editor: " + exception.Message; }
+                return result;
+            });
         }
 
-        internal static SupervisorStatus ReadStatus()
+        internal static SupervisorStatus ReadStatus() => _status;
+
+        private static SupervisorStatus ReadStatusFromDisk()
         {
             try
             {
@@ -578,9 +675,21 @@ namespace MCPForUnityLauncher.Editor
             if (string.IsNullOrWhiteSpace(value)) return null;
             value = value.Trim().Trim('"');
             if (Path.IsPathRooted(value)) return File.Exists(value) ? Path.GetFullPath(value) : null;
-            var extensions = Application.platform == RuntimePlatform.WindowsEditor
-                ? new[] { "", ".exe" } : new[] { "" };
-            foreach (string directory in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
+            bool windows = Path.DirectorySeparatorChar == '\\';
+            var extensions = windows ? new[] { "", ".exe" } : new[] { "" };
+            var directories = new List<string>((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator));
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            directories.Add(Path.Combine(userProfile, ".local", "bin"));
+            directories.Add(Path.Combine(userProfile, ".cargo", "bin"));
+            if (windows)
+            {
+                string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                directories.Add(Path.Combine(local, "Programs", "uv"));
+                directories.Add(Path.Combine(local, "Microsoft", "WinGet", "Links"));
+                directories.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "uv"));
+            }
+            else directories.AddRange(new[] { "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin" });
+            foreach (string directory in directories)
             {
                 if (string.IsNullOrWhiteSpace(directory)) continue;
                 foreach (string extension in extensions)

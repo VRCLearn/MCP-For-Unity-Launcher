@@ -47,6 +47,10 @@ namespace MCPForUnityLauncher.Editor
             _waitForServer = waitForServer ?? (token => Task.FromResult(true));
         }
 
+        // A healthy, unchanged socket needs no periodic HTTP round trip.
+        internal bool NeedsVerification => _client != null && _local && _managed() && _client.IsConnected &&
+            (_session == null || _client.State?.SessionId != _confirmedRawSession);
+
         public string TransportName => "http";
         public bool IsConnected
         {
@@ -100,11 +104,14 @@ namespace MCPForUnityLauncher.Editor
                 if (!connected || generation != _generation) return false;
                 if (local)
                 {
+                    string rawSession = client.State?.SessionId;
                     // Probe retries registration races, but the entire attempt has a
                     // deadline independent of the upstream handshake implementation.
                     remaining = _timeout - elapsed.Elapsed;
                     if (remaining <= TimeSpan.Zero) throw new TimeoutException("Project connection deadline expired.");
                     session = await WithinAsync(_probe(cancellation.Token), remaining, cancellation.Token);
+                    if (!client.IsConnected || client.State?.SessionId != rawSession)
+                        throw new InvalidOperationException("Project session changed during registration. Retrying the connection.");
                     if (string.IsNullOrEmpty(session)) throw new InvalidOperationException("Project registration is incomplete.");
                 }
                 if (generation != _generation) return false;
@@ -160,6 +167,7 @@ namespace MCPForUnityLauncher.Editor
             var client = _client;
             int generation = _generation;
             if (client == null || !client.IsConnected) return false;
+            string rawSession = client.State?.SessionId;
             bool local = _local && _managed();
             using (var cancellation = new CancellationTokenSource())
             {
@@ -169,7 +177,8 @@ namespace MCPForUnityLauncher.Editor
                     if (local)
                     {
                         string session = await WithinAsync(_probe(cancellation.Token), timeout, cancellation.Token);
-                        if (generation != _generation || !_managed()) return false;
+                        if (generation != _generation || !_managed() || !client.IsConnected ||
+                            client.State?.SessionId != rawSession) return false;
                         if (string.IsNullOrEmpty(session)) throw new InvalidOperationException("Project registration is incomplete.");
                         _session = session;
                         _confirmedRawSession = client.State?.SessionId;

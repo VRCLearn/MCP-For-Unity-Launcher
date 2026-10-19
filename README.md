@@ -2,7 +2,7 @@
 
 **English** | [日本語](docs/i18n/README-ja.md) | [한국어](docs/i18n/README-ko.md) | [繁體中文](docs/i18n/README-zh-TW.md) | [简体中文](docs/i18n/README-zh.md)
 
-Version 0.4.1 waits for the local MCP server to become healthy before opening a WebSocket, avoiding cold-start connection errors and premature verification warnings. It also gives a running server 60 seconds of failed health checks before restarting it, so temporary work is less likely to interrupt every project. Project recovery and verified readiness from 0.4.0 remain available. After updating Launcher, close all participating Editors, allow the old supervisor to exit, and reopen the projects to activate both changes. MCP for Unity 10.3.x remains supported; this update mitigates delayed health responses but does not change upstream file scanning.
+Version 1.0.0 removes periodic Editor stalls caused by synchronous uvx cache probes. Server maintenance runs on one background worker, launch settings are cached until configuration changes, and project registration is verified at connection or recovered-session changes instead of every ten seconds. Shared-server ownership, automatic recovery, and cleanup after the last Editor exits remain unchanged. MCP for Unity 10.3.x remains supported.
 
 A Unity Editor addon for [MCP for Unity](https://github.com/VRCLearn/unity-mcp), installable through VPM or UPM, that starts its local server when you open a Unity project and keeps it running across multiple editors.
 

@@ -41,6 +41,8 @@ internal static class Program
         await Check("cancelled registration cannot revive a stopped generation", StaleRegistration);
         await Check("late verification cannot overwrite a replacement", StaleVerification);
         await Check("upstream session changes require a fresh confirmation", SessionChange);
+        await Check("initial registration cannot confirm a different raw session", SessionChangesDuringStart);
+        await Check("recovery verification cannot confirm a different raw session", SessionChangesDuringVerification);
         await Check("disabling management preserves the existing connection", DisabledPreserves);
         await Check("scope changes cancel pending local work", ConfigurationChange);
         await Check("retirement uses the WebSocket force-stop path", SocketRetirement);
@@ -232,17 +234,57 @@ internal static class Program
         var raw = new FakeClient();
         var adapter = Adapter(() => raw, _ => Task.FromResult(session));
         Require(await Timely(adapter.StartAsync()), "Session fixture failed to start");
+        Require(!adapter.NeedsVerification, "A stable confirmed session requested another registration probe");
         raw.State = TransportState.Connected("fake", sessionId: "new-raw");
+        Require(adapter.NeedsVerification, "A changed raw session did not request registration verification");
         Require(!adapter.IsConnected && !adapter.State.IsConnected, "A changed raw session reused the old confirmation");
         session = "second";
         Require(await Timely(adapter.VerifyAsync()) && adapter.State.SessionId == session, "New raw session was not confirmed");
+        Require(!adapter.NeedsVerification, "A verified recovered session kept requesting registration probes");
         raw.IsConnected = false;
         Require(!adapter.IsConnected, "Raw socket failure retained Ready");
+        Require(!adapter.NeedsVerification, "A disconnected socket requested an HTTP registration probe");
         raw.IsConnected = true;
         raw.State = TransportState.Connected("fake", sessionId: "pending");
         Require(!adapter.IsConnected, "A reconnecting raw socket was immediately Ready");
+        Require(adapter.NeedsVerification, "A recovered raw socket did not request verification");
         session = "third";
         Require(await Timely(adapter.VerifyAsync()) && adapter.State.SessionId == session, "Reconnected socket failed to confirm");
+        await adapter.StopAsync();
+    }
+
+    private static async Task SessionChangesDuringStart()
+    {
+        var registration = new TaskCompletionSource<string>();
+        int probes = 0;
+        var raw = new FakeClient();
+        var adapter = Adapter(() => raw, _ => { probes++; return registration.Task; });
+        Task<bool> pending = adapter.StartAsync();
+        await Until(() => probes == 1);
+        raw.State = TransportState.Connected("fake", sessionId: "reconnected-during-registration");
+        registration.SetResult("obsolete-registration");
+        Require(!await Timely(pending), "Initial registration confirmed a raw session that changed during its probe");
+        Require(!adapter.IsConnected, "An obsolete initial registration published Ready");
+        await adapter.StopAsync();
+    }
+
+    private static async Task SessionChangesDuringVerification()
+    {
+        var registration = new TaskCompletionSource<string>();
+        int probes = 0;
+        var raw = new FakeClient();
+        var adapter = Adapter(() => raw, _ => ++probes == 2 ? registration.Task : Task.FromResult("verified-" + probes));
+        Require(await Timely(adapter.StartAsync()), "Session-race fixture failed to start");
+        raw.State = TransportState.Connected("fake", sessionId: "first-recovered-session");
+        Require(adapter.NeedsVerification, "First recovered raw session did not need verification");
+        Task<bool> pending = adapter.VerifyAsync();
+        await Until(() => probes == 2);
+        raw.State = TransportState.Connected("fake", sessionId: "second-recovered-session");
+        registration.SetResult("obsolete-recovery-registration");
+        Require(!await Timely(pending), "A recovery probe confirmed a different raw session");
+        Require(!adapter.IsConnected && adapter.NeedsVerification, "Obsolete recovery verification accepted the latest socket");
+        Require(await Timely(adapter.VerifyAsync()) && !adapter.NeedsVerification,
+            "The latest raw session could not obtain a fresh confirmation");
         await adapter.StopAsync();
     }
 

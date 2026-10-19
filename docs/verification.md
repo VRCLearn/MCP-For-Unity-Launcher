@@ -119,3 +119,17 @@ The initial 0.1.0 release retains these unverified interactive acceptance cases.
 10. Disable management for A while B remains enabled; B's service should remain alive.
 
 No existing user Unity projects are modified by the development checks.
+
+## 1.0.0 — Editor maintenance stalls (2026-10-19)
+
+The maintenance fix was tested locally as unreleased 0.4.2. It is published as 1.0.0; the measurements below refer to that same Editor implementation.
+
+Verified on Windows with Unity 2022.3.22f1 and MCP for Unity 10.3.0.
+
+- Python suite: 83 tests, 82 passed and one POSIX-only guardian-signal test skipped. Native C#/Python process identity interoperability passed.
+- Linked production transport: 17 lifecycle scenarios passed, including raw-session changes during initial and recovery verification.
+- Isolated Unity missing/present dependency fixtures passed. Connection, configuration-cache invalidation, no periodic verification, serial maintenance, late active writes followed by release, reenable/disable races, stale generation results, and five-language UI checks passed.
+- Existing supervisor tests passed for concurrent projects, last-editor normal exit and explicit release, dead/reused process identities, recovery, external-server preservation and owned descendant cleanup. The production Python supervisor protocol was unchanged.
+- The repaired 0.4.2 package was installed in the user's existing project. A low-allocation stopwatch wrapper measured the actual Launcher update callback for 90.007 seconds, then restored its original subscription. Maximum callback duration: 10.8925 ms; callbacks over 16 ms: 0; over 50 ms: 0. The project remained connected. The Unity Profiler was disabled throughout this final check.
+
+An earlier full-Profiler sampling attempt introduced severe self-profiling overhead and memory pressure. It was stopped, its history was cleared, and the user confirmed normal responsiveness returned. That attempt is excluded from acceptance evidence. The final stopwatch measurement bounds Launcher callback work; it does not establish that unrelated Editor plugins can never stall. No live user Editor was closed to test shutdown; shared lifecycle behavior was exercised by the automated process/supervisor and isolated Unity fixtures above. Native macOS/Linux Editor acceptance was not run.

@@ -1,6 +1,6 @@
 # MCP for Unity Launcher
 
-Version 0.4.1 waits for an identifying local MCP health response before opening a WebSocket and delays periodic verification until a connection has succeeded. An owned running server gets 60 seconds of failed health checks before restart, reducing interruptions during temporary work. The connection deadline and per-project recovery from 0.4.0 remain available. After updating, close all participating Editors, let the old supervisor exit, then reopen the projects to activate both changes. MCP for Unity 10.3.x remains supported. This mitigates delayed health responses; upstream file scanning is unchanged.
+Version 1.0.0 removes periodic Editor stalls caused by synchronous uvx cache probes. Server maintenance runs on one background worker, launch settings are cached until configuration changes, and project registration is verified at connection or recovered-session changes instead of every ten seconds. Shared-server ownership, automatic recovery, and cleanup after the last Editor exits remain unchanged. MCP for Unity 10.3.x remains supported.
 
 Install this Unity package through VPM or UPM in every participating project alongside MCP for Unity 10.3.x. On opening a project, Launcher automatically starts a shared local HTTP server and connects the Editor bridge. An independent supervisor keeps the server alive while registered editors remain and restarts owned processes after failures.
 

@@ -55,7 +55,10 @@ public static class LauncherCompilationProbe
             }
 
             if (integration)
+            {
                 await (Task)Type.GetType("LauncherConnectionProbe, Assembly-CSharp-Editor", true).GetMethod("Run").Invoke(null, null);
+                await (Task)Type.GetType("LauncherMaintenanceProbe, Assembly-CSharp-Editor", true).GetMethod("Run").Invoke(null, null);
+            }
             LauncherLocalizationProbe.Run();
             Require(!_nonEnglishDiagnostics, "Launcher emitted a non-English diagnostic");
             Debug.Log("LAUNCHER_VERIFICATION: passed");

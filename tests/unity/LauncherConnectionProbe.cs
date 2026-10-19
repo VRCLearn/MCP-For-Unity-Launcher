@@ -35,6 +35,7 @@ public static class LauncherConnectionProbe
             await VerifySessionChangeAndDisabledManagement();
             await VerifyConfigurationTransitionCancellation();
             await VerifyServerReadinessGate();
+            await VerifyStableSessionHasNoPeriodicVerification();
             await VerifyNeverConnectedDoesNotPeriodicallyVerify();
             Debug.Log("LAUNCHER_CONNECTION_VERIFICATION: passed");
         }
@@ -377,6 +378,59 @@ public static class LauncherConnectionProbe
         manager.ForceStop(TransportMode.Http);
         Debug.Log("LAUNCHER_NO_PREMATURE_VERIFICATION: passed");
     }
+
+    private static async Task VerifyStableSessionHasNoPeriodicVerification()
+    {
+        int probes = 0;
+        var raw = new TestClient();
+        var adapter = NewManaged(() => raw, token => Task.FromResult("confirmed-" + ++probes));
+        var manager = new TransportManager();
+        manager.Configure(() => adapter, () => new TestClient());
+        MCPServiceLocator.Register(manager);
+        MCPServiceLocator.Register<IBridgeControlService>(new BridgeControlService());
+        MCPServiceLocator.Register<IServerManagementService>(new UnreachableServer());
+        Invoke("InstallWrapper");
+        Set("_connectedOnce", false);
+        Set("_needsNewEndpoint", false);
+        Set("_nextConnect", 0d);
+        Set("_nextVerify", 0d);
+        Set("_verificationInFlight", false);
+        Set("_disconnectedSince", -1d);
+        Set("_lastConnectionError", null);
+        await TickConnection();
+        Require(adapter.IsConnected && probes == 1 && !NeedsVerification(adapter),
+            "Initial connection did not perform exactly one registration verification");
+        for (int i = 0; i < 5; i++)
+        {
+            // Force the old periodic-verification deadline due on every tick.
+            Set("_nextVerify", 0d);
+            await TickConnection();
+        }
+        Require(probes == 1 && raw.Starts == 1 && !(bool)Get("_verificationInFlight"),
+            "An unchanged confirmed connection repeated its HTTP registration probe");
+
+        raw.IsConnected = false;
+        raw.State = raw.State.WithError("Upstream socket is reconnecting");
+        await TickConnection();
+        Require(probes == 1 && !NeedsVerification(adapter),
+            "A disconnected raw socket triggered a registration probe before recovery");
+        raw.IsConnected = true;
+        raw.State = TransportState.Connected("test", sessionId: "recovered-raw-session");
+        Require(NeedsVerification(adapter), "A recovered raw session did not request verification");
+        Set("_nextVerify", 0d);
+        await TickConnection();
+        await WaitUntil(() => !(bool)Get("_verificationInFlight"), "Recovered session verification did not settle");
+        Require(probes == 2 && raw.Starts == 1 && adapter.IsConnected && !NeedsVerification(adapter),
+            "Recovery was not verified exactly once without rebuilding the raw connection");
+        Set("_nextVerify", 0d);
+        await TickConnection();
+        Require(probes == 2, "A recovered stable session resumed periodic registration probes");
+        manager.ForceStop(TransportMode.Http);
+        Debug.Log("LAUNCHER_NO_PERIODIC_VERIFICATION: passed");
+    }
+
+    private static bool NeedsVerification(IMcpTransportClient client)
+        => (bool)client.GetType().GetProperty("NeedsVerification", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(client);
 
     private static bool Waiting(IMcpTransportClient client)
         => (bool)client.GetType().GetProperty("WaitingForServer", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(client);
