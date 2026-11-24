@@ -44,7 +44,7 @@ jobs:
             echo 'This release already exists; keeping its published assets.'
             exit 0
           fi
-          gh release create "$RELEASE_TAG" dist/*.zip dist/*.unitypackage dist/package.json \
+          gh release create "$RELEASE_TAG" dist/*.zip dist/*.unitypackage dist/package.json dist/SHA256SUMS.txt \
             --verify-tag --target "$RELEASE_REVISION" \
             --title "MCP for Unity Launcher $RELEASE_TAG" --notes-file dist/release-notes.md
       - name: Refresh the default-branch VPM website
