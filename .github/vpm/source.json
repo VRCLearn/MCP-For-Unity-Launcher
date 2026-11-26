@@ -4,7 +4,8 @@
     "url": "https://vrclearn.github.io/MCP-For-Unity-Launcher/index.json",
     "author": {
         "name": "VRCLearn",
-        "url": "https://github.com/VRCLearn"
+        "url": "https://github.com/VRCLearn",
+        "email": "vpm@vrclearn.com"
     },
     "description": "MCP for Unity and its Launcher, with automatic shared-server startup and recovery across Unity editors.",
     "bannerUrl": "vrclearn-banner.png",
